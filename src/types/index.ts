@@ -22,11 +22,19 @@ export interface ItemOS {
     fotosSaida: string[];      // URLs Firebase Storage — exige exatamente 2
 }
 
+// ─── Cliente ───────────────────────────────────────────────────────────────
+export interface Cliente {
+    id: string;
+    nome: string;
+    whatsapp: string;
+}
+
 // ─── Ordem de Serviço ─────────────────────────────────────────────────────
 export interface OrdemServico {
     id: string;
     clienteNome: string;
     clienteTelefone: string;
+    clienteId?: string;        // ID do cliente na coleção 'clientes'
     status: StatusOS;
     itens: ItemOS[];
     sinal: number;             // valor pago na entrada
