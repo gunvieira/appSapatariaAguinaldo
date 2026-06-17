@@ -17,13 +17,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { 
-    getClientes, 
-    addCliente, 
     getCatalogo, 
     addServicoCatalogo, 
     uploadFoto, 
     salvarOS 
 } from '../../src/config/firebaseServices';
+import {getClientes, addCliente} from '../../src/services/clienteService';
 import { Cliente, CatalogoServico, Servico } from '../../src/types';
 import ClienteCard from '../../src/components/ClienteCard';
 import ItemOSFormCard from '../../src/components/ItemOSFormCard';
