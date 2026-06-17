@@ -1,7 +1,7 @@
 import { collection, addDoc, getDocs, query, orderBy, Timestamp, where, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
-import { Cliente, CatalogoServico, OrdemServico } from '../types';
+import { CatalogoServico, OrdemServico } from '../types';
 
 // Coleções do Firestore
 const CLIENTES_COL = 'clientes';
@@ -9,43 +9,7 @@ const CATALOGO_COL = 'catalogo_servicos';
 const ORDENS_COL = 'ordens_servico';
 const VENDAS_COL = 'vendas_diretas';
 
-// ─── Clientes ────────────────────────────────────────────────────────────────
-export async function getClientes(): Promise<Cliente[]> {
-    try {
-        const querySnapshot = await getDocs(query(collection(db, CLIENTES_COL), orderBy('nome')));
-        const clientes: Cliente[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            clientes.push({
-                id: doc.id,
-                nome: data.nome || '',
-                whatsapp: data.whatsapp || '',
-            });
-        });
-        return clientes;
-    } catch (error) {
-        console.error('Erro ao buscar clientes:', error);
-        throw error;
-    }
-}
 
-export async function addCliente(nome: string, whatsapp: string): Promise<Cliente> {
-    try {
-        const docRef = await addDoc(collection(db, CLIENTES_COL), {
-            nome,
-            whatsapp,
-            createdAt: Timestamp.now(),
-        });
-        return {
-            id: docRef.id,
-            nome,
-            whatsapp,
-        };
-    } catch (error) {
-        console.error('Erro ao adicionar cliente:', error);
-        throw error;
-    }
-}
 
 // ─── Catálogo de Serviços ────────────────────────────────────────────────────
 export async function getCatalogo(): Promise<CatalogoServico[]> {
