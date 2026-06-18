@@ -4,53 +4,9 @@ import { db, storage } from './firebase';
 import { CatalogoServico, OrdemServico } from '../types';
 
 // Coleções do Firestore
-const CLIENTES_COL = 'clientes';
-const CATALOGO_COL = 'catalogo_servicos';
 const ORDENS_COL = 'ordens_servico';
 const VENDAS_COL = 'vendas_diretas';
 
-
-
-// ─── Catálogo de Serviços ────────────────────────────────────────────────────
-export async function getCatalogo(): Promise<CatalogoServico[]> {
-    try {
-        const querySnapshot = await getDocs(query(collection(db, CATALOGO_COL), orderBy('descricao')));
-        const catalogo: CatalogoServico[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            catalogo.push({
-                id: doc.id,
-                descricao: data.descricao || '',
-                valorPadrao: data.valorPadrao || 0,
-                ativo: data.ativo !== undefined ? data.ativo : true,
-            });
-        });
-        return catalogo;
-    } catch (error) {
-        console.error('Erro ao buscar catálogo de serviços:', error);
-        throw error;
-    }
-}
-
-export async function addServicoCatalogo(descricao: string, valorPadrao: number): Promise<CatalogoServico> {
-    try {
-        const docRef = await addDoc(collection(db, CATALOGO_COL), {
-            descricao,
-            valorPadrao,
-            ativo: true,
-            createdAt: Timestamp.now(),
-        });
-        return {
-            id: docRef.id,
-            descricao,
-            valorPadrao,
-            ativo: true,
-        };
-    } catch (error) {
-        console.error('Erro ao adicionar serviço ao catálogo:', error);
-        throw error;
-    }
-}
 
 // ─── Upload de Mídia (Firebase Storage) ───────────────────────────────────────
 export async function uploadFoto(uri: string): Promise<string> {
