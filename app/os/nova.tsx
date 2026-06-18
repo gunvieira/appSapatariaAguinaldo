@@ -25,6 +25,14 @@ import { getCatalogo, addServicoCatalogo} from '../../src/services/catalogoServi
 import { Cliente, CatalogoServico, Servico } from '../../src/types';
 import ClienteCard from '../../src/components/ClienteCard';
 import ItemOSFormCard from '../../src/components/ItemOSFormCard';
+import ModalImpressora from '../../src/components/ModalImpressora';
+import {
+    getMacImpressora,
+    salvarMacImpressora,
+    limparMacImpressora,
+    imprimirReciboOS,
+    OSPrintData,
+} from '../../src/services/printerService';
 
 export default function NovaOS() {
     const router = useRouter();
@@ -71,6 +79,11 @@ export default function NovaOS() {
     const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
     const [activePhotoTarget, setActivePhotoTarget] = useState<{ itemIndex: number; photoIndex: number } | null>(null);
     const cameraRef = useRef<CameraView>(null);
+
+    // Impressora
+    const [showModalImpressora, setShowModalImpressora] = useState(false);
+    const [pendingOSPrintData, setPendingOSPrintData] = useState<OSPrintData | null>(null);
+    const [imprimindo, setImprimindo] = useState(false);
 
     // ─── Efeitos de Carregamento Inicial ──────────────────────────────────────
     useEffect(() => {
@@ -403,22 +416,95 @@ export default function NovaOS() {
                 observacao: observacao.trim()
             };
 
-            await salvarOS(dadosOS);
+            const osId = await salvarOS(dadosOS);
 
-            Alert.alert('Sucesso', 'Ordem de Serviço criada com sucesso!', [
-                {
-                    text: 'OK',
-                    onPress: () => {
-                        router.replace('/(tabs)/ordens');
-                    }
-                }
-            ]);
+            const osPrintData: OSPrintData = {
+                id: osId,
+                clienteNome: selectedCliente.nome,
+                clienteTelefone: selectedCliente.whatsapp,
+                itens: itensProntos.map(item => ({
+                    descricao: item.descricao,
+                    servicos: item.servicos,
+                })),
+                sinal: sinalNum,
+                saldo: saldoNum,
+                formaPagamentoSinal,
+            };
+            setPendingOSPrintData(osPrintData);
+
+            Alert.alert(
+                '\u2705 OS Criada com Sucesso!',
+                'Deseja imprimir os comprovantes?\n(2 vias: loja e cliente)',
+                [
+                    {
+                        text: 'N\u00e3o, s\u00f3 OK',
+                        style: 'cancel',
+                        onPress: () => router.replace('/(tabs)/ordens'),
+                    },
+                    {
+                        text: '\u{1F5A8}\uFE0F Imprimir',
+                        onPress: handleImprimirOS,
+                    },
+                ]
+            );
         } catch (error) {
             console.error(error);
             Alert.alert('Erro ao Salvar', 'Ocorreu um erro ao realizar o upload das fotos ou ao salvar a OS.');
         } finally {
             setLoading(false);
             setSaveProgress('');
+        }
+    };
+
+    // ─── Impressão ────────────────────────────────────────────────────────────
+    const handleImprimirOS = async () => {
+        if (!pendingOSPrintData) {
+            router.replace('/(tabs)/ordens');
+            return;
+        }
+        const mac = await getMacImpressora();
+        if (!mac) {
+            // Nenhuma impressora salva — abre modal de seleção
+            setShowModalImpressora(true);
+        } else {
+            await executarImpressaoOS(mac);
+        }
+    };
+
+    const executarImpressaoOS = async (mac: string) => {
+        let sucesso = false;
+        try {
+            setImprimindo(true);
+            sucesso = await imprimirReciboOS(mac, pendingOSPrintData!);
+        } finally {
+            setImprimindo(false);
+        }
+
+        if (sucesso) {
+            setPendingOSPrintData(null);
+            router.replace('/(tabs)/ordens');
+        } else {
+            Alert.alert(
+                'Falha na Impressão',
+                'Não foi possível conectar com a impressora.\nDeseja remover este dispositivo como padrão e escolher outro?',
+                [
+                    { 
+                        text: 'Apenas Cancelar', 
+                        style: 'cancel',
+                        onPress: () => {
+                            setPendingOSPrintData(null);
+                            router.replace('/(tabs)/ordens');
+                        }
+                    },
+                    {
+                        text: 'Remover e Escolher Outra',
+                        onPress: async () => {
+                            await limparMacImpressora();
+                            setShowModalImpressora(true);
+                        }
+                    }
+                ]
+            );
         }
     };
 
@@ -828,6 +914,32 @@ export default function NovaOS() {
             {loading && saveProgress.length === 0 && (
                 <View style={styles.progressOverlay}>
                     <ActivityIndicator size="large" color="#8C6239" />
+                </View>
+            )}
+
+            {/* ─── MODAL: SELEÇÃO DE IMPRESSORA ──────────────────────────────── */}
+            <ModalImpressora
+                visible={showModalImpressora}
+                macSalvo={undefined}
+                onClose={() => {
+                    setShowModalImpressora(false);
+                    setPendingOSPrintData(null);
+                    router.replace('/(tabs)/ordens');
+                }}
+                onSelectDevice={async (device) => {
+                    await salvarMacImpressora(device.address);
+                    setShowModalImpressora(false);
+                    await executarImpressaoOS(device.address);
+                }}
+            />
+
+            {/* Overlay de impressão */}
+            {imprimindo && (
+                <View style={styles.progressOverlay}>
+                    <View style={styles.progressBox}>
+                        <ActivityIndicator size="large" color="#8C6239" />
+                        <Text style={styles.progressText}>Imprimindo comprovantes (2 vias)...</Text>
+                    </View>
                 </View>
             )}
         </KeyboardAvoidingView>

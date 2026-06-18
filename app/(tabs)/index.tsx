@@ -101,6 +101,8 @@ export default function Dashboard() {
         );
     };
 
+
+
     if (loading && !refreshing) {
         return (
             <SafeAreaView style={styles.loadingContainer}>

@@ -1,241 +1,419 @@
-import React, { useState } from 'react';
-import { 
-  Modal, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  FlatList, 
-  StyleSheet, 
-  ActivityIndicator, 
-  PermissionsAndroid, 
-  Platform, 
-  Alert 
+import React, { useState, useEffect } from 'react';
+import {
+    Modal,
+    View,
+    Text,
+    TouchableOpacity,
+    FlatList,
+    StyleSheet,
+    ActivityIndicator,
+    PermissionsAndroid,
+    Platform,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
 
 interface ModalImpressoraProps {
-  visible: boolean;
-  onClose: () => void;
-  onSelectDevice: (device: BluetoothDevice) => void;
+    visible: boolean;
+    onClose: () => void;
+    onSelectDevice: (device: BluetoothDevice) => void;
+    macSalvo?: string; // MAC da impressora já salva — para destacar na lista
 }
 
-export default function ModalImpressora({ visible, onClose, onSelectDevice }: ModalImpressoraProps) {
-  const [isScanning, setIsScanning] = useState(false);
-  const [devices, setDevices] = useState<BluetoothDevice[]>([]);
+export default function ModalImpressora({
+    visible,
+    onClose,
+    onSelectDevice,
+    macSalvo,
+}: ModalImpressoraProps) {
+    const [carregandoPareados, setCarregandoPareados] = useState(false);
+    const [buscandoNovos, setBuscandoNovos] = useState(false);
+    const [devices, setDevices] = useState<BluetoothDevice[]>([]);
 
-  // Função para solicitar permissões no Android
-  const requestAccess = async () => {
-    if (Platform.OS === 'android' && Platform.Version >= 23) {
-      if (Platform.Version >= 31) {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-        return granted['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED;
-      }
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    }
-    return true;
-  };
+    // Carrega dispositivos já pareados assim que o modal abre
+    useEffect(() => {
+        if (visible) {
+            carregarPareados();
+        } else {
+            setDevices([]);
+        }
+    }, [visible]);
 
-  const handleScan = async () => {
-    const hasPermission = await requestAccess();
-    if (!hasPermission) {
-      Alert.alert('Permissão Negada', 'O aplicativo precisa de permissão para buscar dispositivos Bluetooth.');
-      return;
-    }
+    const carregarPareados = async () => {
+        setCarregandoPareados(true);
+        try {
+            const enabled = await RNBluetoothClassic.isBluetoothEnabled();
+            if (!enabled) {
+                Alert.alert(
+                    'Bluetooth Desligado',
+                    'Ligue o Bluetooth do celular e tente novamente.'
+                );
+                return;
+            }
+            const pareados = await RNBluetoothClassic.getBondedDevices();
+            setDevices(pareados);
+        } catch (err) {
+            console.error('Erro ao listar dispositivos pareados:', err);
+        } finally {
+            setCarregandoPareados(false);
+        }
+    };
 
-    setIsScanning(true);
-    try {
-      const enabled = await RNBluetoothClassic.isBluetoothEnabled();
-      if (!enabled) {
-        Alert.alert('Atenção', 'Por favor, ligue o Bluetooth do seu celular.');
-        setIsScanning(false);
-        return;
-      }
+    const solicitarPermissoes = async (): Promise<boolean> => {
+        if (Platform.OS !== 'android') return true;
+        if (Platform.Version >= 31) {
+            // Android 12+ requer BLUETOOTH_SCAN e BLUETOOTH_CONNECT
+            const resultado = await PermissionsAndroid.requestMultiple([
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            ]);
+            return (
+                resultado['android.permission.BLUETOOTH_CONNECT'] ===
+                PermissionsAndroid.RESULTS.GRANTED
+            );
+        }
+        // Android < 12 usa apenas localização para BT
+        const resultado = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+        return resultado === PermissionsAndroid.RESULTS.GRANTED;
+    };
 
-      const paired = await RNBluetoothClassic.getBondedDevices();
-      const discovered = await RNBluetoothClassic.startDiscovery();
-      
-      const allDevices = [...paired, ...discovered];
-      const uniqueDevices = Array.from(new Map(allDevices.map(item => [item.address, item])).values());
-      
-      setDevices(uniqueDevices);
-    } catch (err) {
-      console.error('Erro ao buscar Bluetooth:', err);
-      Alert.alert('Erro', 'Falha ao buscar dispositivos.');
-    } finally {
-      setIsScanning(false);
-    }
-  };
+    const handleBuscarNovos = async () => {
+        const temPermissao = await solicitarPermissoes();
+        if (!temPermissao) {
+            Alert.alert(
+                'Permissão Negada',
+                'O aplicativo precisa de permissão de localização para buscar dispositivos Bluetooth.'
+            );
+            return;
+        }
 
-  const renderDevice = ({ item }: { item: BluetoothDevice }) => (
-    <TouchableOpacity 
-      style={styles.deviceCard}
-      onPress={() => onSelectDevice(item)} 
-    >
-      <View style={styles.deviceInfo}>
-        <Ionicons name="print-outline" size={24} color="#5D4037" />
-        <View style={styles.deviceTexts}>
-          <Text style={styles.deviceName}>{item.name || 'Dispositivo Desconhecido'}</Text>
-          <Text style={styles.deviceAddress}>{item.address}</Text>
-        </View>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color="#8D6E63" />
-    </TouchableOpacity>
-  );
+        setBuscandoNovos(true);
+        try {
+            const enabled = await RNBluetoothClassic.isBluetoothEnabled();
+            if (!enabled) {
+                Alert.alert('Bluetooth Desligado', 'Ligue o Bluetooth e tente novamente.');
+                return;
+            }
+            const descobertos = await RNBluetoothClassic.startDiscovery();
+            // Mescla pareados + descobertos e deduplica por MAC address
+            const todos = [...devices, ...descobertos];
+            const unicos = Array.from(
+                new Map(todos.map((d) => [d.address, d])).values()
+            );
+            setDevices(unicos);
+        } catch (err) {
+            console.error('Erro ao descobrir dispositivos:', err);
+            Alert.alert('Erro', 'Falha ao buscar novos dispositivos. Tente novamente.');
+        } finally {
+            setBuscandoNovos(false);
+        }
+    };
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          
-          <View style={styles.header}>
-            <Text style={styles.title}>Parear Impressora</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#5D4037" />
+    const renderDevice = ({ item }: { item: BluetoothDevice }) => {
+        const isSalvo = item.address === macSalvo;
+        return (
+            <TouchableOpacity
+                style={[styles.deviceCard, isSalvo && styles.deviceCardSalvo]}
+                onPress={() => onSelectDevice(item)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.deviceLeft}>
+                    <View style={[styles.deviceIconWrapper, isSalvo && styles.deviceIconWrapperSalvo]}>
+                        <Ionicons
+                            name="print-outline"
+                            size={22}
+                            color={isSalvo ? '#FAF9F6' : '#8C6239'}
+                        />
+                    </View>
+                    <View style={styles.deviceTexts}>
+                        <Text style={styles.deviceName} numberOfLines={1}>
+                            {item.name || 'Dispositivo sem nome'}
+                        </Text>
+                        <Text style={styles.deviceAddress}>{item.address}</Text>
+                        {isSalvo && (
+                            <Text style={styles.deviceSalvoLabel}>✓ Impressora salva</Text>
+                        )}
+                    </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#9A8E85" />
             </TouchableOpacity>
-          </View>
+        );
+    };
 
-          <TouchableOpacity 
-            style={styles.scanButton} 
-            onPress={handleScan}
-            disabled={isScanning}
-          >
-            {isScanning ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="bluetooth" size={20} color="#fff" style={styles.scanIcon} />
-                <Text style={styles.scanButtonText}>Buscar Dispositivos</Text>
-              </>
-            )}
-          </TouchableOpacity>
+    return (
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={onClose}
+        >
+            <View style={styles.overlay}>
+                <View style={styles.sheet}>
+                    {/* Handle visual */}
+                    <View style={styles.handle} />
 
-          <View style={styles.listContainer}>
-            <Text style={styles.listSubtitle}>Dispositivos Encontrados:</Text>
-            {devices.length === 0 && !isScanning ? (
-              <Text style={styles.emptyText}>Nenhuma impressora encontrada.</Text>
-            ) : (
-              <FlatList
-                data={devices}
-                keyExtractor={(item) => item.address}
-                renderItem={renderDevice}
-                contentContainerStyle={styles.flatListContent}
-                showsVerticalScrollIndicator={false}
-              />
-            )}
-          </View>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <View>
+                            <Text style={styles.title}>Impressora Bluetooth</Text>
+                            <Text style={styles.subtitle}>Selecione a impressora para imprimir</Text>
+                        </View>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeBtn}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Ionicons name="close" size={24} color="#7A7067" />
+                        </TouchableOpacity>
+                    </View>
 
-        </View>
-      </View>
-    </Modal>
-  );
+                    {/* Lista de dispositivos */}
+                    <View style={styles.listWrapper}>
+                        <View style={styles.listHeaderRow}>
+                            <Text style={styles.listLabel}>
+                                {carregandoPareados
+                                    ? 'Carregando...'
+                                    : `${devices.length} dispositivo(s) encontrado(s)`}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.btnRefresh}
+                                onPress={carregarPareados}
+                                disabled={carregandoPareados}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Ionicons name="refresh-outline" size={16} color="#8C6239" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {carregandoPareados ? (
+                            <View style={styles.loadingWrapper}>
+                                <ActivityIndicator color="#8C6239" />
+                                <Text style={styles.loadingText}>Buscando impressoras...</Text>
+                            </View>
+                        ) : (
+                            <FlatList
+                                data={devices}
+                                keyExtractor={(item) => item.address}
+                                renderItem={renderDevice}
+                                style={styles.flatList}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={styles.flatListContent}
+                                ListEmptyComponent={
+                                    <View style={styles.emptyWrapper}>
+                                        <Ionicons name="print-outline" size={42} color="#E2DCD5" />
+                                        <Text style={styles.emptyText}>
+                                            Nenhuma impressora pareada encontrada.{'\n'}
+                                            Pare a impressora nas configurações do celular e tente novamente.
+                                        </Text>
+                                    </View>
+                                }
+                            />
+                        )}
+                    </View>
+
+                    {/* Botão buscar novos dispositivos (descoberta ativa) */}
+                    <TouchableOpacity
+                        style={[styles.btnBuscar, buscandoNovos && styles.btnBuscarDisabled]}
+                        onPress={handleBuscarNovos}
+                        disabled={buscandoNovos}
+                        activeOpacity={0.8}
+                    >
+                        {buscandoNovos ? (
+                            <>
+                                <ActivityIndicator color="#8C6239" size="small" />
+                                <Text style={styles.btnBuscarText}>
+                                    Buscando novos dispositivos...
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <Ionicons name="bluetooth-outline" size={18} color="#8C6239" />
+                                <Text style={styles.btnBuscarText}>Buscar novos dispositivos</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: '#FAF8F5',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    minHeight: '60%',
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#3E2723',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  scanButton: {
-    backgroundColor: '#8D6E63',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  scanIcon: {
-    marginRight: 8,
-  },
-  scanButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  listContainer: {
-    flex: 1,
-  },
-  listSubtitle: {
-    fontSize: 14,
-    color: '#795548',
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  flatListContent: {
-    paddingBottom: 20,
-  },
-  deviceCard: {
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#EFEBE9',
-  },
-  deviceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deviceTexts: {
-    marginLeft: 12,
-  },
-  deviceName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#3E2723',
-  },
-  deviceAddress: {
-    fontSize: 12,
-    color: '#8D6E63',
-    marginTop: 2,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#A1887F',
-    marginTop: 20,
-    fontStyle: 'italic',
-  },
+    overlay: {
+        flex: 1,
+        backgroundColor: 'rgba(44, 37, 32, 0.45)',
+        justifyContent: 'flex-end',
+    },
+    sheet: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 22,
+        borderTopRightRadius: 22,
+        maxHeight: '82%',
+        shadowColor: '#2C2520',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 12,
+    },
+    handle: {
+        width: 40,
+        height: 4,
+        backgroundColor: '#E2DCD5',
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginTop: 10,
+        marginBottom: 4,
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0EBE5',
+    },
+    title: {
+        fontSize: 17,
+        fontWeight: 'bold',
+        color: '#2C2520',
+    },
+    subtitle: {
+        fontSize: 12,
+        color: '#9A8E85',
+        marginTop: 3,
+    },
+    closeBtn: {
+        padding: 4,
+    },
+    listWrapper: {
+        flex: 1,
+        minHeight: 180,
+    },
+    listHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: 8,
+    },
+    listLabel: {
+        fontSize: 12,
+        color: '#9A8E85',
+        fontWeight: '600',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
+    },
+    btnRefresh: {
+        padding: 4,
+    },
+    loadingWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        paddingVertical: 30,
+    },
+    loadingText: {
+        color: '#7A7067',
+        fontSize: 13,
+    },
+    flatList: {
+        flex: 1,
+    },
+    flatListContent: {
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+    },
+    deviceCard: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        padding: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#E2DCD5',
+    },
+    deviceCardSalvo: {
+        borderColor: '#8C6239',
+        backgroundColor: '#FDF8F4',
+    },
+    deviceLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    deviceIconWrapper: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: '#F5F2EB',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    deviceIconWrapperSalvo: {
+        backgroundColor: '#8C6239',
+    },
+    deviceTexts: {
+        flex: 1,
+    },
+    deviceName: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#2C2520',
+    },
+    deviceAddress: {
+        fontSize: 11,
+        color: '#9A8E85',
+        marginTop: 2,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    deviceSalvoLabel: {
+        fontSize: 11,
+        color: '#8C6239',
+        fontWeight: '700',
+        marginTop: 3,
+    },
+    emptyWrapper: {
+        alignItems: 'center',
+        paddingVertical: 32,
+        paddingHorizontal: 24,
+    },
+    emptyText: {
+        fontSize: 13,
+        color: '#9A8E85',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginTop: 12,
+    },
+    btnBuscar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        margin: 16,
+        marginTop: 8,
+        paddingVertical: 13,
+        borderRadius: 10,
+        borderWidth: 1.5,
+        borderColor: '#8C6239',
+        backgroundColor: '#FFFFFF',
+    },
+    btnBuscarDisabled: {
+        borderColor: '#E2DCD5',
+        backgroundColor: '#FAF9F6',
+    },
+    btnBuscarText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#8C6239',
+    },
 });
