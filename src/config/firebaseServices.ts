@@ -33,13 +33,16 @@ export async function uploadFoto(uri: string): Promise<string> {
         const storageRef = ref(storage, filename);
 
         // Upload do blob
-        await uploadBytes(storageRef, blob);
+        await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
 
         // Retorna a URL pública de download
         const downloadURL = await getDownloadURL(storageRef);
         return downloadURL;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Erro ao realizar upload da foto:', error);
+        if (error && typeof error === 'object' && 'serverResponse' in error) {
+            console.error('Payload de resposta do Firebase Storage (serverResponse):', error.serverResponse);
+        }
         throw error;
     }
 }

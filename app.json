@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "scheme": "appSapatariaAguinaldo",
+    "scheme": "appsapatariaaguinaldo",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -39,9 +39,13 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-camera", {
-        "cameraPermission": "Necessário para fotografar os calçados."
-      }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Necessário para fotografar os calçados."
+        }
+      ],
+      "expo-font"
     ]
   }
 }
