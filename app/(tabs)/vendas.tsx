@@ -16,12 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {
-    getVendasDoDia,
-    salvarVendaDireta,
-    VendaDiretaDoc,
-    ItemVenda,
-} from '../../src/config/firebaseServices';
+import { getVendasDoDia, salvarVendaDireta } from '../../src/services/vendaService';
+import { VendaDiretaDoc, ItemVenda } from '../../src/types';
 import ModalImpressora from '../../src/components/ModalImpressora';
 import {
     getMacImpressora,

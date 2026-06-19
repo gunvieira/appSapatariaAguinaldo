@@ -16,7 +16,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getOSById, atualizarStatusOS } from '../../src/config/firebaseServices';
+import { getOSById, atualizarStatusOS } from '../../src/services/ordemServicoService';
 import { OrdemServico, StatusOS, FormaPagamento } from '../../src/types';
 import StatusBadge from '../../src/components/StatusBadge';
 import ModalImpressora from '../../src/components/ModalImpressora';

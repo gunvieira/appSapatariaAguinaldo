@@ -12,12 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {
-    getDadosCaixaDoDia,
-    fecharCaixa,
-    getHistoricoFechamentos,
-    DadosCaixaDoDia,
-} from '../../src/config/firebaseServices';
+import { getDadosCaixaDoDia, fecharCaixa, getHistoricoFechamentos } from '../../src/services/caixaService';
+import { DadosCaixaDoDia } from '../../src/types';
 import { FechamentoCaixa } from '../../src/types';
 import ModalImpressora from '../../src/components/ModalImpressora';
 import {

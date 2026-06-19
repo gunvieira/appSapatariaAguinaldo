@@ -16,10 +16,8 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
-import { 
-    uploadFoto, 
-    salvarOS 
-} from '../../src/config/firebaseServices';
+import { uploadFoto} from '../../src/services/storageService';
+import {salvarOS} from '../../src/services/ordemServicoService';
 import {getClientes, addCliente} from '../../src/services/clienteService';
 import { getCatalogo, addServicoCatalogo} from '../../src/services/catalogoService';
 import { Cliente, CatalogoServico, Servico } from '../../src/types';

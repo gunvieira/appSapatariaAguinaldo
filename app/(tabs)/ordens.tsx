@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getOrdens } from '../../src/config/firebaseServices';
+import { getOrdens } from '../../src/services/ordemServicoService';
 import { OrdemServico, StatusOS } from '../../src/types';
 import OSItemCard from '../../src/components/OSItemCard';
 

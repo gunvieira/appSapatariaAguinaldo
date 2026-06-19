@@ -11,7 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getDashboardMetrics, getRecentOS, DashboardMetrics } from '../../src/config/firebaseServices';
+import {getDashboardMetrics } from'../../src/services/dashboardService';
+import {getRecentOS} from '../../src/services/ordemServicoService';
+import { DashboardMetrics } from '../../src/types';
 import { OrdemServico } from '../../src/types';
 import MetricCard from '../../src/components/MetricCard';
 import OSItemCard from '../../src/components/OSItemCard';
