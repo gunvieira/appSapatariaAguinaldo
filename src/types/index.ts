@@ -40,6 +40,7 @@ export interface OrdemServico {
     sinal: number;             // valor pago na entrada
     saldo: number;             // valor a pagar na retirada
     formaPagamentoSinal: FormaPagamento;
+    formaPagamentoSaldo?: FormaPagamento;
     observacao?: string;       // campo opcional
     createdAt: Timestamp;
     updatedAt: Timestamp;
@@ -72,4 +73,33 @@ export interface CatalogoServico {
     descricao: string;
     valorPadrao: number;
     ativo: boolean;
+}
+
+export interface DashboardMetrics {
+    faturamentoHoje: number;
+    osAguardando: number;
+    osEmConserto: number;
+    osPronto: number;
+}
+
+export interface ItemVenda {
+    descricao: string;
+    valor: number;
+}
+
+export interface VendaDiretaDoc {
+    id: string;
+    itens: ItemVenda[];
+    valor_total: number;
+    formaPagamento: FormaPagamento;
+    createdAt: Timestamp;
+}
+
+export interface DadosCaixaDoDia {
+    totalDinheiro: number;
+    totalPix: number;
+    totalCartao: number;
+    totalGeral: number;
+    quantidadeOS: number;
+    quantidadeVendas: number;
 }
