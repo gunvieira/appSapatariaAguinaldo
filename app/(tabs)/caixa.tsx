@@ -16,12 +16,15 @@ import { getDadosCaixaDoDia, fecharCaixa, getHistoricoFechamentos } from '../../
 import { DadosCaixaDoDia } from '../../src/types';
 import { FechamentoCaixa } from '../../src/types';
 import ModalImpressora from '../../src/components/ModalImpressora';
+import ModalComprovante from '../../src/components/ModalComprovante';
 import {
     getMacImpressora,
     salvarMacImpressora,
     limparMacImpressora,
     imprimirReciboFechamento,
+    buildReciboFechamentoTexto,
 } from '../../src/services/printerService';
+import { formatarReal } from '../../src/utils/format';
 
 // ─── Auxiliares ───────────────────────────────────────────────────────────────
 function formatarDataCompleta(timestamp: any): string {
@@ -70,8 +73,8 @@ function MetodoPagCard({ icone, label, valor, corFundo, corIcone, corTexto }: Me
                 <Ionicons name={icone as any} size={18} color={corIcone} />
             </View>
             <Text style={[styles.metodoPagLabel, { color: corTexto }]}>{label}</Text>
-            <Text style={[styles.metodoPagValor, { color: corIcone }]}>
-                R$ {valor.toFixed(2)}
+            <Text style={[styles.metodoPagValor, { color: '#8C6239' }]}>
+                {formatarReal(valor)}
             </Text>
         </View>
     );
@@ -98,7 +101,7 @@ function FechamentoCard({ fechamento }: FechamentoCardProps) {
             </View>
 
             {/* Total em destaque */}
-            <Text style={styles.fechamentoTotal}>R$ {fechamento.totalGeral.toFixed(2)}</Text>
+            <Text style={styles.fechamentoTotal}>{formatarReal(fechamento.totalGeral)}</Text>
 
             {/* Breakdown por forma de pagamento */}
             <View style={styles.fechamentoBreakdown}>
@@ -106,7 +109,7 @@ function FechamentoCard({ fechamento }: FechamentoCardProps) {
                     <View style={styles.fechamentoBreakdownItem}>
                         <View style={[styles.fechamentoBreakdownDot, { backgroundColor: '#2E7D32' }]} />
                         <Text style={styles.fechamentoBreakdownText}>
-                            Dinheiro: <Text style={styles.fechamentoBreakdownValor}>R$ {fechamento.totalDinheiro.toFixed(2)}</Text>
+                            Dinheiro: <Text style={styles.fechamentoBreakdownValor}>{formatarReal(fechamento.totalDinheiro)}</Text>
                         </Text>
                     </View>
                 )}
@@ -114,7 +117,7 @@ function FechamentoCard({ fechamento }: FechamentoCardProps) {
                     <View style={styles.fechamentoBreakdownItem}>
                         <View style={[styles.fechamentoBreakdownDot, { backgroundColor: '#1565C0' }]} />
                         <Text style={styles.fechamentoBreakdownText}>
-                            PIX: <Text style={styles.fechamentoBreakdownValor}>R$ {fechamento.totalPix.toFixed(2)}</Text>
+                            PIX: <Text style={styles.fechamentoBreakdownValor}>{formatarReal(fechamento.totalPix)}</Text>
                         </Text>
                     </View>
                 )}
@@ -122,7 +125,7 @@ function FechamentoCard({ fechamento }: FechamentoCardProps) {
                     <View style={styles.fechamentoBreakdownItem}>
                         <View style={[styles.fechamentoBreakdownDot, { backgroundColor: '#8D6E1A' }]} />
                         <Text style={styles.fechamentoBreakdownText}>
-                            Cartão: <Text style={styles.fechamentoBreakdownValor}>R$ {fechamento.totalCartao.toFixed(2)}</Text>
+                            Cartão: <Text style={styles.fechamentoBreakdownValor}>{formatarReal(fechamento.totalCartao)}</Text>
                         </Text>
                     </View>
                 )}
@@ -161,6 +164,10 @@ export default function Caixa() {
     const [showModalImpressora, setShowModalImpressora] = useState(false);
     const [pendingFechamentoPrint, setPendingFechamentoPrint] = useState<any | null>(null);
     const [imprimindo, setImprimindo] = useState(false);
+
+    // Pré-visualização do comprovante
+    const [showComprovante, setShowComprovante] = useState(false);
+    const [textoComprovante, setTextoComprovante] = useState('');
 
     // ─── Carregar Dados ───────────────────────────────────────────────────────
     const carregarDados = async () => {
@@ -206,10 +213,10 @@ export default function Caixa() {
         Alert.alert(
             'Fechar Caixa do Dia',
             `Confirmar o fechamento com os seguintes totais?\n\n` +
-            `💰 Total Geral: R$ ${dadosDia.totalGeral.toFixed(2)}\n` +
-            `💵 Dinheiro:    R$ ${dadosDia.totalDinheiro.toFixed(2)}\n` +
-            `📱 PIX:         R$ ${dadosDia.totalPix.toFixed(2)}\n` +
-            `💳 Cartão:      R$ ${dadosDia.totalCartao.toFixed(2)}\n\n` +
+            `💰 Total Geral: ${formatarReal(dadosDia.totalGeral)}\n` +
+            `💵 Dinheiro:    ${formatarReal(dadosDia.totalDinheiro)}\n` +
+            `📱 PIX:         ${formatarReal(dadosDia.totalPix)}\n` +
+            `💳 Cartão:      ${formatarReal(dadosDia.totalCartao)}\n\n` +
             `📋 ${dadosDia.quantidadeOS} OS  •  🛒 ${dadosDia.quantidadeVendas} vendas diretas`,
             [
                 { text: 'Cancelar', style: 'cancel' },
@@ -241,30 +248,10 @@ export default function Caixa() {
             };
             setPendingFechamentoPrint(printObj);
 
-            Alert.alert(
-                '✅ Caixa Fechado!',
-                `Fechamento registrado com sucesso.\nTotal: R$ ${dadosDia.totalGeral.toFixed(2)}\n\nDeseja imprimir o comprovante?`,
-                [
-                    { 
-                        text: 'Não', 
-                        style: 'cancel',
-                        onPress: () => {
-                            setPendingFechamentoPrint(null);
-                        }
-                    },
-                    {
-                        text: '🖨️ Imprimir',
-                        onPress: async () => {
-                            const mac = await getMacImpressora();
-                            if (!mac) {
-                                setShowModalImpressora(true);
-                            } else {
-                                await executarImpressaoFechamento(mac, printObj);
-                            }
-                        }
-                    }
-                ]
-            );
+            // Gerar texto limpo e abrir modal de pré-visualização
+            const texto = buildReciboFechamentoTexto(printObj as any);
+            setTextoComprovante(texto);
+            setShowComprovante(true);
 
             await carregarDados();
         } catch (error) {
@@ -346,7 +333,7 @@ export default function Caixa() {
                     </View>
 
                     <Text style={styles.totalCardValor}>
-                        R$ {dadosDia.totalGeral.toFixed(2)}
+                        {formatarReal(dadosDia.totalGeral)}
                     </Text>
 
                     {caixaVazio && (
@@ -514,6 +501,26 @@ export default function Caixa() {
                     } else {
                         Alert.alert('Sucesso', 'Impressora configurada com sucesso!');
                     }
+                }}
+            />
+
+            {/* ─── MODAL: PRÉ-VISUALIZAÇÃO DO COMPROVANTE ─────────────────── */}
+            <ModalComprovante
+                visible={showComprovante}
+                titulo="Fechamento de Caixa"
+                textoComprovante={textoComprovante}
+                onImprimir={async () => {
+                    setShowComprovante(false);
+                    const mac = await getMacImpressora();
+                    if (!mac) {
+                        setShowModalImpressora(true);
+                    } else {
+                        await executarImpressaoFechamento(mac, pendingFechamentoPrint);
+                    }
+                }}
+                onFechar={() => {
+                    setShowComprovante(false);
+                    setPendingFechamentoPrint(null);
                 }}
             />
 

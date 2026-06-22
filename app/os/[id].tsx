@@ -16,17 +16,20 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getOSById, atualizarStatusOS } from '../../src/services/ordemServicoService';
+import { getOSById, atualizarStatusOS, deletarOS } from '../../src/services/ordemServicoService';
 import { OrdemServico, StatusOS, FormaPagamento } from '../../src/types';
 import StatusBadge from '../../src/components/StatusBadge';
 import ModalImpressora from '../../src/components/ModalImpressora';
+import ModalComprovante from '../../src/components/ModalComprovante';
 import {
     getMacImpressora,
     salvarMacImpressora,
     limparMacImpressora,
     imprimirReciboRetiradaOS,
     OSPrintData,
+    buildReciboRetiradaTexto,
 } from '../../src/services/printerService';
+import { formatarReal, formatarTelefone } from '../../src/utils/format';
 
 // Helper to format date
 function formatarDataCompleta(timestamp: any): string {
@@ -59,6 +62,11 @@ export default function DetalhesOS() {
     const [formaPagamentoSaldoSel, setFormaPagamentoSaldoSel] = useState<FormaPagamento>('pix');
     const [showPagamentoModal, setShowPagamentoModal] = useState(false);
     const [processandoEntrega, setProcessandoEntrega] = useState(false);
+
+    // Pré-visualização do comprovante de entrega
+    const [showComprovante, setShowComprovante] = useState(false);
+    const [textoComprovante, setTextoComprovante] = useState('');
+    const [pgtoSaldoComprovante, setPgtoSaldoComprovante] = useState('pix');
 
     useEffect(() => {
         carregarOS();
@@ -158,28 +166,28 @@ export default function DetalhesOS() {
     };
 
     const registrarSucessoEntrega = async (pgtoSaldo?: FormaPagamento) => {
-        Alert.alert(
-            'OS Entregue com Sucesso!',
-            'Deseja imprimir o comprovante de entrega e quitação do cliente?',
-            [
-                {
-                    text: 'Não',
-                    style: 'cancel',
-                    onPress: () => carregarOS(),
-                },
-                {
-                    text: '🖨️ Imprimir',
-                    onPress: async () => {
-                        const mac = await getMacImpressora();
-                        if (!mac) {
-                            setShowModalImpressora(true);
-                        } else {
-                            await executarImpressaoRetirada(mac, pgtoSaldo || 'pix');
-                        }
-                    }
-                }
-            ]
-        );
+        if (!os) return;
+        // Atualizar a OS na tela
+        await carregarOS();
+        // Montar dados para o comprovante
+        const printData: OSPrintData = {
+            id: os.id,
+            clienteNome: os.clienteNome,
+            clienteTelefone: os.clienteTelefone,
+            itens: os.itens.map(it => ({
+                descricao: it.descricao,
+                servicos: it.servicos,
+            })),
+            sinal: os.sinal,
+            saldo: os.saldo,
+            formaPagamentoSinal: os.formaPagamentoSinal,
+            createdAt: os.createdAt,
+        };
+        const pgto = pgtoSaldo || 'pix';
+        const texto = buildReciboRetiradaTexto(printData, pgto);
+        setTextoComprovante(texto);
+        setPgtoSaldoComprovante(pgto);
+        setShowComprovante(true);
     };
 
     const executarImpressaoRetirada = async (mac: string, pgtoSaldo: string) => {
@@ -233,14 +241,55 @@ export default function DetalhesOS() {
         }
     };
 
-    const handleReimprimirComprovante = async () => {
-        const mac = await getMacImpressora();
-        if (!mac) {
-            setShowModalImpressora(true);
-        } else {
-            // Em OS entregue, a formaPagamentoSaldo pode estar salva no documento
-            const pgtoSaldo = (os as any)?.formaPagamentoSaldo || 'pix';
-            await executarImpressaoRetirada(mac, pgtoSaldo);
+    const handleReimprimirComprovante = () => {
+        if (!os) return;
+        const pgtoSaldo = (os as any)?.formaPagamentoSaldo || 'pix';
+        const printData: OSPrintData = {
+            id: os.id,
+            clienteNome: os.clienteNome,
+            clienteTelefone: os.clienteTelefone,
+            itens: os.itens.map(it => ({
+                descricao: it.descricao,
+                servicos: it.servicos,
+            })),
+            sinal: os.sinal,
+            saldo: os.saldo,
+            formaPagamentoSinal: os.formaPagamentoSinal,
+            createdAt: os.createdAt,
+        };
+        const texto = buildReciboRetiradaTexto(printData, pgtoSaldo);
+        setTextoComprovante(texto);
+        setPgtoSaldoComprovante(pgtoSaldo);
+        setShowComprovante(true);
+    };
+
+    const handleExcluirOS = () => {
+        if (!os) return;
+        Alert.alert(
+            'Excluir Ordem de Serviço',
+            `Tem certeza que deseja excluir permanentemente a OS #${os.id.substring(os.id.length - 6).toUpperCase()}? Esta ação não pode ser desfeita.`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Excluir',
+                    style: 'destructive',
+                    onPress: executarExclusao,
+                },
+            ]
+        );
+    };
+
+    const executarExclusao = async () => {
+        if (!os) return;
+        try {
+            setLoading(true);
+            await deletarOS(os.id);
+            Alert.alert('Sucesso', 'Ordem de Serviço excluída com sucesso!');
+            router.replace('/(tabs)/ordens');
+        } catch (error) {
+            Alert.alert('Erro', 'Não foi possível excluir a Ordem de Serviço.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -273,9 +322,6 @@ export default function DetalhesOS() {
         <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.btnHeaderBack} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#2C2520" />
-                </TouchableOpacity>
                 <View style={styles.headerTitleContainer}>
                     <Text style={styles.headerTitle}>OS #{idCurto}</Text>
                     <Text style={styles.headerSubtitle}>Criada em {formatarDataCompleta(os.createdAt)}</Text>
@@ -302,7 +348,7 @@ export default function DetalhesOS() {
                         </View>
                         <View style={styles.clienteTexts}>
                             <Text style={styles.clienteNome}>{os.clienteNome}</Text>
-                            <Text style={styles.clienteWhatsapp}>{os.clienteTelefone}</Text>
+                            <Text style={styles.clienteWhatsapp}>{formatarTelefone(os.clienteTelefone)}</Text>
                         </View>
                     </View>
                     <View style={styles.clienteActions}>
@@ -329,7 +375,7 @@ export default function DetalhesOS() {
                             {item.servicos.map((serv) => (
                                 <View key={serv.id} style={styles.servicoRow}>
                                     <Text style={styles.servicoDesc}>• {serv.descricao}</Text>
-                                    <Text style={styles.servicoValor}>R$ {serv.valor.toFixed(2)}</Text>
+                                    <Text style={styles.servicoValor}>{formatarReal(serv.valor)}</Text>
                                 </View>
                             ))}
 
@@ -365,17 +411,17 @@ export default function DetalhesOS() {
                     <Text style={styles.sectionTitle}>Resumo Financeiro</Text>
                     <View style={styles.financeRow}>
                         <Text style={styles.financeLabel}>Total dos Serviços</Text>
-                        <Text style={styles.financeValor}>R$ {totalGeral.toFixed(2)}</Text>
+                        <Text style={styles.financeValor}>{formatarReal(totalGeral)}</Text>
                     </View>
                     <View style={styles.financeRow}>
                         <Text style={styles.financeLabel}>Sinal Pago (Entrada)</Text>
                         <Text style={[styles.financeValor, { color: '#2E7D32' }]}>
-                            - R$ {os.sinal.toFixed(2)} ({os.formaPagamentoSinal.toUpperCase()})
+                            - {formatarReal(os.sinal)} ({os.formaPagamentoSinal.toUpperCase()})
                         </Text>
                     </View>
                     <View style={[styles.financeRow, styles.totalFinanceRow]}>
                         <Text style={styles.totalFinanceLabel}>Saldo na Retirada</Text>
-                        <Text style={styles.totalFinanceValor}>R$ {os.saldo.toFixed(2)}</Text>
+                        <Text style={styles.totalFinanceValor}>{formatarReal(os.saldo)}</Text>
                     </View>
                     {os.status === 'entregue' && (os as any).formaPagamentoSaldo && (
                         <View style={styles.pgtoSaldoInfo}>
@@ -436,6 +482,26 @@ export default function DetalhesOS() {
                     )}
                 </View>
 
+                {/* ─── AÇÕES GERAIS DA OS (EDITAR/EXCLUIR) ────────────────────────── */}
+                <View style={[styles.sectionCard, { marginTop: 0, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between' }]}>
+                    <TouchableOpacity
+                        style={[styles.btnGerenciar, { borderColor: '#8C6239' }]}
+                        onPress={() => router.push(`/os/nova?id=${os.id}`)}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="create-outline" size={18} color="#8C6239" />
+                        <Text style={[styles.btnGerenciarText, { color: '#8C6239' }]}>Editar OS</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.btnGerenciar, { borderColor: '#C0392B', backgroundColor: '#FDF2F2' }]}
+                        onPress={handleExcluirOS}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="trash-outline" size={18} color="#C0392B" />
+                        <Text style={[styles.btnGerenciarText, { color: '#C0392B' }]}>Excluir OS</Text>
+                    </TouchableOpacity>
+                </View>
+
             </ScrollView>
 
             {/* ─── MODAL SELEÇÃO DE PAGAMENTO SALDO ───────────────────────────── */}
@@ -452,7 +518,7 @@ export default function DetalhesOS() {
                         <Text style={styles.modalSubtitle}>
                             Para entregar o calçado, registre o recebimento do saldo de:
                         </Text>
-                        <Text style={styles.modalValorDestaque}>R$ {os.saldo.toFixed(2)}</Text>
+                        <Text style={styles.modalValorDestaque}>{formatarReal(os.saldo)}</Text>
 
                         <Text style={styles.labelForma}>Forma de Pagamento:</Text>
                         <View style={styles.formaRow}>
@@ -503,19 +569,19 @@ export default function DetalhesOS() {
                             <TouchableOpacity
                                 style={[
                                     styles.formaChip,
-                                    formaPagamentoSaldoSel === 'cartao' && styles.formaChipActive
+                                    formaPagamentoSaldoSel === 'cartão' && styles.formaChipActive
                                 ]}
-                                onPress={() => setFormaPagamentoSaldoSel('cartao')}
+                                onPress={() => setFormaPagamentoSaldoSel('cartão')}
                             >
                                 <Ionicons
                                     name="card-outline"
                                     size={16}
-                                    color={formaPagamentoSaldoSel === 'cartao' ? '#FAF9F6' : '#7A7067'}
+                                    color={formaPagamentoSaldoSel === 'cartão' ? '#FAF9F6' : '#7A7067'}
                                 />
                                 <Text
                                     style={[
                                         styles.formaText,
-                                        formaPagamentoSaldoSel === 'cartao' && styles.formaTextActive
+                                        formaPagamentoSaldoSel === 'cartão' && styles.formaTextActive
                                     ]}
                                 >
                                     Cartão
@@ -565,6 +631,24 @@ export default function DetalhesOS() {
                     const pgtoSaldo = os.status === 'entregue' ? ((os as any).formaPagamentoSaldo || 'pix') : formaPagamentoSaldoSel;
                     await executarImpressaoRetirada(device.address, pgtoSaldo);
                 }}
+            />
+
+            {/* ─── MODAL: PRÉ-VISUALIZAÇÃO DO COMPROVANTE DE ENTREGA ────────── */}
+            <ModalComprovante
+                visible={showComprovante}
+                titulo="Comprovante de Entrega"
+                textoComprovante={textoComprovante}
+                telefoneWhatsApp={os?.clienteTelefone}
+                onImprimir={async () => {
+                    setShowComprovante(false);
+                    const mac = await getMacImpressora();
+                    if (!mac) {
+                        setShowModalImpressora(true);
+                    } else {
+                        await executarImpressaoRetirada(mac, pgtoSaldoComprovante);
+                    }
+                }}
+                onFechar={() => setShowComprovante(false)}
             />
 
             {/* Overlay de impressão */}
@@ -929,6 +1013,21 @@ const styles = StyleSheet.create({
         color: '#8C6239',
         fontWeight: 'bold',
         fontSize: 14,
+    },
+    btnGerenciar: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 44,
+        borderRadius: 8,
+        borderWidth: 1,
+        marginHorizontal: 5,
+    },
+    btnGerenciarText: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        marginLeft: 6,
     },
 
     // Modal Sheet selector

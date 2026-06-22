@@ -12,31 +12,41 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { uploadFoto} from '../../src/services/storageService';
-import {salvarOS} from '../../src/services/ordemServicoService';
+import {salvarOS, getOSById, atualizarOS} from '../../src/services/ordemServicoService';
 import {getClientes, addCliente} from '../../src/services/clienteService';
 import { getCatalogo, addServicoCatalogo} from '../../src/services/catalogoService';
-import { Cliente, CatalogoServico, Servico } from '../../src/types';
+import { Cliente, CatalogoServico, Servico, StatusOS } from '../../src/types';
 import ClienteCard from '../../src/components/ClienteCard';
 import ItemOSFormCard from '../../src/components/ItemOSFormCard';
 import ModalImpressora from '../../src/components/ModalImpressora';
+import ModalComprovante from '../../src/components/ModalComprovante';
 import {
     getMacImpressora,
     salvarMacImpressora,
     limparMacImpressora,
     imprimirReciboOS,
     OSPrintData,
+    buildReciboOSTexto,
 } from '../../src/services/printerService';
+import { 
+    formatarReal, 
+    aplicarMascaraTelefone, 
+    formatarTelefone, 
+    limparMascaraTelefone 
+} from '../../src/utils/format';
 
 export default function NovaOS() {
     const router = useRouter();
+    const { id } = useLocalSearchParams<{ id?: string }>();
     
     // ─── Estados Principais ──────────────────────────────────────────────────
     const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<StatusOS>('aguardando');
     const [saveProgress, setSaveProgress] = useState('');
     
     // Cliente
@@ -58,7 +68,7 @@ export default function NovaOS() {
 
     // Financeiro & Gerais
     const [sinal, setSinal] = useState('');
-    const [formaPagamentoSinal, setFormaPagamentoSinal] = useState<'dinheiro' | 'pix' | 'cartao'>('pix');
+    const [formaPagamentoSinal, setFormaPagamentoSinal] = useState<'dinheiro' | 'pix' | 'cartão'>('pix');
     const [observacao, setObservacao] = useState('');
 
     // Catálogo & Modal de Serviços
@@ -83,10 +93,19 @@ export default function NovaOS() {
     const [pendingOSPrintData, setPendingOSPrintData] = useState<OSPrintData | null>(null);
     const [imprimindo, setImprimindo] = useState(false);
 
+    // Pré-visualização do comprovante
+    const [showComprovante, setShowComprovante] = useState(false);
+    const [textoComprovante, setTextoComprovante] = useState('');
+    const [telefoneClienteComprovante, setTelefoneClienteComprovante] = useState('');
+
     // ─── Efeitos de Carregamento Inicial ──────────────────────────────────────
     useEffect(() => {
-        carregarDados();
-    }, []);
+        if (id) {
+            carregarOSParaEdicao(id);
+        } else {
+            carregarDados();
+        }
+    }, [id]);
 
     const carregarDados = async () => {
         try {
@@ -99,6 +118,53 @@ export default function NovaOS() {
             setCatalogo(listaCatalogo);
         } catch (error) {
             Alert.alert('Erro', 'Não foi possível carregar os dados iniciais do banco.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const carregarOSParaEdicao = async (osId: string) => {
+        try {
+            setLoading(true);
+            const [listaClientes, listaCatalogo, osExistente] = await Promise.all([
+                getClientes(),
+                getCatalogo(),
+                getOSById(osId)
+            ]);
+            setClientes(listaClientes);
+            setCatalogo(listaCatalogo);
+            
+            if (osExistente) {
+                // Preencher cliente selecionado
+                const clienteObj: Cliente = listaClientes.find(c => c.id === osExistente.clienteId) || {
+                    id: osExistente.clienteId || '',
+                    nome: osExistente.clienteNome,
+                    whatsapp: osExistente.clienteTelefone || ''
+                };
+                setSelectedCliente(clienteObj);
+                
+                // Preencher status
+                setStatus(osExistente.status);
+                
+                // Preencher itens da OS
+                setItens(osExistente.itens.map(item => ({
+                    id: item.id || Math.random().toString(36).substring(2, 9),
+                    descricao: item.descricao,
+                    servicos: item.servicos,
+                    fotosEntrada: item.fotosEntrada || []
+                })));
+                
+                // Preencher financeiro e observações
+                setSinal(osExistente.sinal > 0 ? osExistente.sinal.toString() : '');
+                setFormaPagamentoSinal(osExistente.formaPagamentoSinal as any || 'pix');
+                setObservacao(osExistente.observacao || '');
+            } else {
+                Alert.alert('Erro', 'Ordem de serviço não encontrada.');
+                router.back();
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Erro', 'Não foi possível carregar a OS para edição.');
         } finally {
             setLoading(false);
         }
@@ -126,7 +192,8 @@ export default function NovaOS() {
         }
         try {
             setLoading(true);
-            const novoCliente = await addCliente(novoClienteNome.trim(), novoClienteWhatsapp.trim());
+            const rawWhatsapp = limparMascaraTelefone(novoClienteWhatsapp);
+            const novoCliente = await addCliente(novoClienteNome.trim(), rawWhatsapp);
             
             setClientes(prev => [novoCliente, ...prev].sort((a, b) => a.nome.localeCompare(b.nome)));
             setSelectedCliente(novoCliente);
@@ -188,7 +255,7 @@ export default function NovaOS() {
         if (cameraRef.current && activePhotoTarget) {
             try {
                 setLoading(true);
-                const options = { quality: 0.85, skipProcessing: false };
+                const options = { quality: 0.85, skipProcessing: false, shutterSound: false };
                 const photo = await cameraRef.current.takePictureAsync(options);
                 
                 if (photo && photo.uri) {
@@ -362,10 +429,10 @@ export default function NovaOS() {
                 return;
             }
             const fotosTiradas = item.fotosEntrada.filter(uri => !!uri);
-            if (fotosTiradas.length !== 2) {
+            if (fotosTiradas.length > 3) {
                 Alert.alert(
-                    'Fotos Obrigatórias',
-                    `É obrigatório capturar exatamente 2 fotos de entrada para o item: "${item.descricao || `Item ${i + 1}`}".`
+                    'Limite de Fotos Excedido',
+                    `Cada item pode ter no máximo 3 fotos de entrada.`
                 );
                 return;
             }
@@ -385,10 +452,14 @@ export default function NovaOS() {
                 
                 for (let j = 0; j < item.fotosEntrada.length; j++) {
                     const localUri = item.fotosEntrada[j];
-                    setSaveProgress(`Enviando foto ${j + 1}/2 do item ${i + 1} de ${totalItens}...`);
-                    
-                    const storageUrl = await uploadFoto(localUri);
-                    urlsUploaded.push(storageUrl);
+                    if (localUri.startsWith('http')) {
+                        // Foto já enviada anteriormente (edição)
+                        urlsUploaded.push(localUri);
+                    } else {
+                        setSaveProgress(`Enviando foto ${j + 1}/${item.fotosEntrada.length} do item ${i + 1} de ${totalItens}...`);
+                        const storageUrl = await uploadFoto(localUri);
+                        urlsUploaded.push(storageUrl);
+                    }
                 }
 
                 itensProntos.push({
@@ -406,7 +477,7 @@ export default function NovaOS() {
                 clienteId: selectedCliente.id,
                 clienteNome: selectedCliente.nome,
                 clienteTelefone: selectedCliente.whatsapp,
-                status: 'aguardando' as const,
+                status: id ? status : ('aguardando' as const),
                 itens: itensProntos,
                 sinal: sinalNum,
                 saldo: saldoNum,
@@ -414,37 +485,39 @@ export default function NovaOS() {
                 observacao: observacao.trim()
             };
 
-            const osId = await salvarOS(dadosOS);
-
-            const osPrintData: OSPrintData = {
-                id: osId,
-                clienteNome: selectedCliente.nome,
-                clienteTelefone: selectedCliente.whatsapp,
-                itens: itensProntos.map(item => ({
-                    descricao: item.descricao,
-                    servicos: item.servicos,
-                })),
-                sinal: sinalNum,
-                saldo: saldoNum,
-                formaPagamentoSinal,
-            };
-            setPendingOSPrintData(osPrintData);
-
-            Alert.alert(
-                '\u2705 OS Criada com Sucesso!',
-                'Deseja imprimir os comprovantes?\n(2 vias: loja e cliente)',
-                [
+            if (id) {
+                await atualizarOS(id, dadosOS);
+                Alert.alert('Sucesso', 'Ordem de Serviço atualizada com sucesso!', [
                     {
-                        text: 'N\u00e3o, s\u00f3 OK',
-                        style: 'cancel',
-                        onPress: () => router.replace('/(tabs)/ordens'),
-                    },
-                    {
-                        text: '\u{1F5A8}\uFE0F Imprimir',
-                        onPress: handleImprimirOS,
-                    },
-                ]
-            );
+                        text: 'OK',
+                        onPress: () => {
+                            router.replace(`/os/${id}`);
+                        }
+                    }
+                ]);
+            } else {
+                const osId = await salvarOS(dadosOS);
+
+                const osPrintData: OSPrintData = {
+                    id: osId,
+                    clienteNome: selectedCliente.nome,
+                    clienteTelefone: selectedCliente.whatsapp,
+                    itens: itensProntos.map(item => ({
+                        descricao: item.descricao,
+                        servicos: item.servicos,
+                    })),
+                    sinal: sinalNum,
+                    saldo: saldoNum,
+                    formaPagamentoSinal,
+                };
+                setPendingOSPrintData(osPrintData);
+
+                // Gerar texto limpo e abrir modal de pré-visualização
+                const texto = buildReciboOSTexto(osPrintData);
+                setTextoComprovante(texto);
+                setTelefoneClienteComprovante(selectedCliente.whatsapp);
+                setShowComprovante(true);
+            }
         } catch (error) {
             console.error(error);
             Alert.alert('Erro ao Salvar', 'Ocorreu um erro ao realizar o upload das fotos ou ao salvar a OS.');
@@ -506,12 +579,21 @@ export default function NovaOS() {
         }
     };
 
+    const sinalVal = parseFloat(sinal.replace(',', '.')) || 0;
+    const hasSinal = sinalVal > 0;
+
     return (
         <KeyboardAvoidingView
             style={{ flex: 1, backgroundColor: '#FAF9F6' }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+            <Stack.Screen options={{ title: id ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço' }} />
+            <ScrollView 
+                style={styles.container} 
+                contentContainerStyle={styles.contentContainer}
+                keyboardShouldPersistTaps="handled"
+            >
                 
                 {/* ─── SEÇÃO CLIENTE ───────────────────────────────────────────── */}
                 <Text style={styles.sectionTitle}>Cliente</Text>
@@ -543,7 +625,7 @@ export default function NovaOS() {
                             )}
                         </View>
 
-                        {showClienteList && filtrarClientes().length > 0 && (
+                        {showClienteList && searchClienteText.trim().length > 0 && (
                             <View style={styles.dropdownList}>
                                 {filtrarClientes().map((c) => (
                                     <TouchableOpacity 
@@ -552,19 +634,34 @@ export default function NovaOS() {
                                         onPress={() => handleSelectCliente(c)}
                                     >
                                         <Text style={styles.dropdownItemName}>{c.nome}</Text>
-                                        <Text style={styles.dropdownItemPhone}>{c.whatsapp}</Text>
+                                        <Text style={styles.dropdownItemPhone}>{formatarTelefone(c.whatsapp)}</Text>
                                     </TouchableOpacity>
                                 ))}
+                                <TouchableOpacity 
+                                    style={[styles.dropdownItem, { borderBottomWidth: 0, backgroundColor: '#FAF2EB' }]}
+                                    onPress={() => {
+                                        const cleanText = searchClienteText.trim();
+                                        const cleanDigits = cleanText.replace(/\D/g, '');
+                                        if (cleanDigits.length >= 8 && /^\d+$/.test(cleanDigits)) {
+                                            setNovoClienteWhatsapp(aplicarMascaraTelefone(cleanDigits));
+                                            setNovoClienteNome('');
+                                        } else {
+                                            setNovoClienteNome(cleanText);
+                                            setNovoClienteWhatsapp('');
+                                        }
+                                        setShowNovoClienteModal(true);
+                                        setShowClienteList(false);
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="person-add-outline" size={16} color="#8C6239" style={{ marginRight: 8 }} />
+                                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#8C6239' }}>
+                                            Não encontrou? Cadastrar "{searchClienteText}"
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
                             </View>
                         )}
-
-                        <TouchableOpacity 
-                            style={styles.btnNovoCliente}
-                            onPress={() => setShowNovoClienteModal(true)}
-                        >
-                            <Ionicons name="person-add-outline" size={18} color="#8C6239" />
-                            <Text style={styles.btnNovoClienteText}>Novo Cliente</Text>
-                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -607,7 +704,7 @@ export default function NovaOS() {
                     
                     <View style={styles.totalRow}>
                         <Text style={styles.totalLabel}>Valor Total:</Text>
-                        <Text style={styles.totalValue}>R$ {calcularTotalOS().toFixed(2)}</Text>
+                        <Text style={styles.totalValue}>{formatarReal(calcularTotalOS())}</Text>
                     </View>
 
                     <View style={styles.rowBetween}>
@@ -625,25 +722,28 @@ export default function NovaOS() {
                         <View style={{ width: '48%' }}>
                             <Text style={styles.inputLabel}>Saldo Restante:</Text>
                             <View style={styles.saldoReadOnlyBox}>
-                                <Text style={styles.saldoReadOnlyText}>R$ {getSaldoRestante().toFixed(2)}</Text>
+                                <Text style={styles.saldoReadOnlyText}>{formatarReal(getSaldoRestante())}</Text>
                             </View>
                         </View>
                     </View>
 
-                    <Text style={styles.inputLabel}>Forma de Pagamento do Sinal:</Text>
-                    <View style={styles.pagamentoGroup}>
-                        {(['dinheiro', 'pix', 'cartao'] as const).map((forma) => (
+                    <Text style={[styles.inputLabel, !hasSinal && { color: '#9A8E85' }]}>
+                        Forma de Pagamento do Sinal: {!hasSinal && '(Indisponível - Sinal zerado)'}
+                    </Text>
+                    <View style={[styles.pagamentoGroup, !hasSinal && { opacity: 0.5 }]}>
+                        {(['dinheiro', 'pix', 'cartão'] as const).map((forma) => (
                             <TouchableOpacity
                                 key={forma}
+                                disabled={!hasSinal}
                                 style={[
                                     styles.pagamentoBtn,
-                                    formaPagamentoSinal === forma && styles.pagamentoBtnActive
+                                    hasSinal && formaPagamentoSinal === forma && styles.pagamentoBtnActive
                                 ]}
                                 onPress={() => setFormaPagamentoSinal(forma)}
                             >
                                 <Text style={[
                                     styles.pagamentoBtnText,
-                                    formaPagamentoSinal === forma && styles.pagamentoBtnTextActive
+                                    hasSinal && formaPagamentoSinal === forma && styles.pagamentoBtnTextActive
                                 ]}>
                                     {forma.toUpperCase()}
                                 </Text>
@@ -681,45 +781,50 @@ export default function NovaOS() {
                 transparent={true}
                 onRequestClose={() => setShowNovoClienteModal(false)}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalBox}>
-                        <Text style={styles.modalTitle}>Cadastrar Novo Cliente</Text>
-                        
-                        <Text style={styles.inputLabel}>Nome Completo:</Text>
-                        <TextInput
-                            style={styles.modalInput}
-                            placeholder="Ex: João da Silva"
-                            placeholderTextColor="#9A8E85"
-                            value={novoClienteNome}
-                            onChangeText={setNovoClienteNome}
-                        />
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalBox}>
+                            <Text style={styles.modalTitle}>Cadastrar Novo Cliente</Text>
+                            
+                            <Text style={styles.inputLabel}>Nome Completo:</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Ex: João da Silva"
+                                placeholderTextColor="#9A8E85"
+                                value={novoClienteNome}
+                                onChangeText={setNovoClienteNome}
+                            />
 
-                        <Text style={styles.inputLabel}>WhatsApp/Telefone:</Text>
-                        <TextInput
-                            style={styles.modalInput}
-                            placeholder="Ex: 11999999999"
-                            placeholderTextColor="#9A8E85"
-                            keyboardType="phone-pad"
-                            value={novoClienteWhatsapp}
-                            onChangeText={setNovoClienteWhatsapp}
-                        />
+                            <Text style={styles.inputLabel}>WhatsApp/Telefone:</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Ex: (11) 99999-9999"
+                                placeholderTextColor="#9A8E85"
+                                keyboardType="phone-pad"
+                                value={novoClienteWhatsapp}
+                                onChangeText={(text) => setNovoClienteWhatsapp(aplicarMascaraTelefone(text))}
+                            />
 
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
-                                onPress={() => setShowNovoClienteModal(false)}
-                            >
-                                <Text style={[styles.modalBtnText, { color: '#7A7067' }]}>Cancelar</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalBtn, { backgroundColor: '#8C6239' }]}
-                                onPress={handleCriarCliente}
-                            >
-                                <Text style={[styles.modalBtnText, { color: '#FAF9F6' }]}>Salvar</Text>
-                            </TouchableOpacity>
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity 
+                                    style={[styles.modalBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
+                                    onPress={() => setShowNovoClienteModal(false)}
+                                >
+                                    <Text style={[styles.modalBtnText, { color: '#7A7067' }]}>Cancelar</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={[styles.modalBtn, { backgroundColor: '#8C6239' }]}
+                                    onPress={handleCriarCliente}
+                                >
+                                    <Text style={[styles.modalBtnText, { color: '#FAF9F6' }]}>Salvar</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ─── MODAL: SELECIONAR / GERENCIAR SERVIÇOS ─────────────────────── */}
@@ -732,119 +837,124 @@ export default function NovaOS() {
                     setShowNovoServicoForm(false);
                 }}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalBox, { height: 550, maxHeight: '85%', width: '90%' }]}>
-                        <View style={styles.modalBoxHeader}>
-                            <Text style={styles.modalTitle}>Selecionar Serviço</Text>
-                            <TouchableOpacity onPress={() => {
-                                setShowServicoModal(false);
-                                setShowNovoServicoForm(false);
-                            }}>
-                                <Ionicons name="close-outline" size={26} color="#2C2520" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
-                            
-                            {/* FORM DE CRIAR SERVIÇO NO CATÁLOGO */}
-                            {!showNovoServicoForm ? (
-                                <TouchableOpacity 
-                                    style={styles.btnToggleNewService}
-                                    onPress={() => setShowNovoServicoForm(true)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Ionicons name="add" size={18} color="#8C6239" />
-                                    <Text style={styles.btnToggleNewServiceText}>Gerenciar Catálogo: Novo Serviço</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <View style={styles.newServiceForm}>
-                                    <Text style={styles.newServiceFormTitle}>Adicionar ao Catálogo Geral</Text>
-                                    
-                                    <TextInput
-                                        style={styles.modalInput}
-                                        placeholder="Nome do conserto (ex: Meia Sola Borracha)"
-                                        placeholderTextColor="#9A8E85"
-                                        value={novoServicoDescricao}
-                                        onChangeText={setNovoServicoDescricao}
-                                    />
-                                    <TextInput
-                                        style={styles.modalInput}
-                                        placeholder="Valor padrão (ex: 45.00)"
-                                        placeholderTextColor="#9A8E85"
-                                        keyboardType="numeric"
-                                        value={novoServicoValor}
-                                        onChangeText={setNovoServicoValor}
-                                    />
-
-                                    <View style={styles.rowBetween}>
-                                        <TouchableOpacity 
-                                            style={[styles.smallBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
-                                            onPress={() => setShowNovoServicoForm(false)}
-                                        >
-                                            <Text style={[styles.smallBtnText, { color: '#7A7067' }]}>Voltar</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity 
-                                            style={[styles.smallBtn, { backgroundColor: '#8C6239' }]}
-                                            onPress={handleCriarServicoCatalogo}
-                                        >
-                                            <Text style={[styles.smallBtnText, { color: '#FAF9F6' }]}>Salvar Catálogo</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            )}
-
-                            {/* LISTA DO CATÁLOGO EXISTENTE */}
-                            <Text style={styles.modalSubLabel}>Catálogo de Serviços Disponíveis</Text>
-                            {catalogo.length > 0 ? (
-                                catalogo.filter(c => c.ativo).map((c) => (
-                                    <TouchableOpacity 
-                                        key={c.id} 
-                                        style={styles.catalogoItemRow}
-                                        onPress={() => handleAdicionarServicoItem(c)}
-                                    >
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.catalogoItemDesc}>{c.descricao}</Text>
-                                            <Text style={styles.catalogoItemPrice}>R$ {c.valorPadrao.toFixed(2)}</Text>
-                                        </View>
-                                        <Ionicons name="chevron-forward-outline" size={16} color="#9A8E85" />
-                                    </TouchableOpacity>
-                                ))
-                            ) : (
-                                <Text style={styles.noDataText}>O catálogo de serviços está vazio.</Text>
-                            )}
-
-                            <View style={styles.modalDivider} />
-
-                            {/* SERVIÇO MANUAL (NÃO VAI PRO CATÁLOGO) */}
-                            <Text style={styles.modalSubLabel}>Serviço Sob Medida (Avulso para esta OS)</Text>
-                            <View style={styles.newServiceForm}>
-                                <TextInput
-                                    style={styles.modalInput}
-                                    placeholder="Descrição (ex: Ajuste especial na fivela)"
-                                    placeholderTextColor="#9A8E85"
-                                    value={servicoManualDescricao}
-                                    onChangeText={setServicoManualDescricao}
-                                />
-                                <TextInput
-                                    style={styles.modalInput}
-                                    placeholder="Preço R$ (ex: 20.00)"
-                                    placeholderTextColor="#9A8E85"
-                                    keyboardType="numeric"
-                                    value={servicoManualValor}
-                                    onChangeText={setServicoManualValor}
-                                />
-                                <TouchableOpacity 
-                                    style={styles.btnAdicionarManual}
-                                    onPress={handleAdicionarServicoManual}
-                                    activeOpacity={0.8}
-                                >
-                                    <Text style={styles.btnAdicionarManualText}>Adicionar Serviço Sob Medida</Text>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={[styles.modalBox, { height: 550, maxHeight: '85%', width: '90%' }]}>
+                            <View style={styles.modalBoxHeader}>
+                                <Text style={styles.modalTitle}>Selecionar Serviço</Text>
+                                <TouchableOpacity onPress={() => {
+                                    setShowServicoModal(false);
+                                    setShowNovoServicoForm(false);
+                                }}>
+                                    <Ionicons name="close-outline" size={26} color="#2C2520" />
                                 </TouchableOpacity>
                             </View>
 
-                        </ScrollView>
+                            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+                                
+                                {/* FORM DE CRIAR SERVIÇO NO CATÁLOGO */}
+                                {!showNovoServicoForm ? (
+                                    <TouchableOpacity 
+                                        style={styles.btnToggleNewService}
+                                        onPress={() => setShowNovoServicoForm(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="add" size={18} color="#8C6239" />
+                                        <Text style={styles.btnToggleNewServiceText}>Novo Serviço</Text>
+                                    </TouchableOpacity>
+                                ) : (
+                                    <View style={styles.newServiceForm}>
+                                        <Text style={styles.newServiceFormTitle}>Adicionar ao Catálogo Geral</Text>
+                                        
+                                        <TextInput
+                                            style={styles.modalInput}
+                                            placeholder="Nome do conserto (ex: Meia Sola Borracha)"
+                                            placeholderTextColor="#9A8E85"
+                                            value={novoServicoDescricao}
+                                            onChangeText={setNovoServicoDescricao}
+                                        />
+                                        <TextInput
+                                            style={styles.modalInput}
+                                            placeholder="Valor padrão (ex: 45.00)"
+                                            placeholderTextColor="#9A8E85"
+                                            keyboardType="numeric"
+                                            value={novoServicoValor}
+                                            onChangeText={setNovoServicoValor}
+                                        />
+
+                                        <View style={styles.rowBetween}>
+                                            <TouchableOpacity 
+                                                style={[styles.smallBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
+                                                onPress={() => setShowNovoServicoForm(false)}
+                                            >
+                                                <Text style={[styles.smallBtnText, { color: '#7A7067' }]}>Voltar</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity 
+                                                style={[styles.smallBtn, { backgroundColor: '#8C6239' }]}
+                                                onPress={handleCriarServicoCatalogo}
+                                            >
+                                                <Text style={[styles.smallBtnText, { color: '#FAF9F6' }]}>Salvar Catálogo</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* LISTA DO CATÁLOGO EXISTENTE */}
+                                <Text style={styles.modalSubLabel}>Catálogo de Serviços Disponíveis</Text>
+                                {catalogo.length > 0 ? (
+                                    catalogo.filter(c => c.ativo).map((c) => (
+                                        <TouchableOpacity 
+                                            key={c.id} 
+                                            style={styles.catalogoItemRow}
+                                            onPress={() => handleAdicionarServicoItem(c)}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.catalogoItemDesc}>{c.descricao}</Text>
+                                                <Text style={styles.catalogoItemPrice}>{formatarReal(c.valorPadrao)}</Text>
+                                            </View>
+                                            <Ionicons name="chevron-forward-outline" size={16} color="#9A8E85" />
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <Text style={styles.noDataText}>O catálogo de serviços está vazio.</Text>
+                                )}
+
+                                <View style={styles.modalDivider} />
+
+                                {/* SERVIÇO MANUAL (NÃO VAI PRO CATÁLOGO) */}
+                                <Text style={styles.modalSubLabel}>Serviço Sob Medida (Avulso para esta OS)</Text>
+                                <View style={styles.newServiceForm}>
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        placeholder="Descrição (ex: Ajuste especial na fivela)"
+                                        placeholderTextColor="#9A8E85"
+                                        value={servicoManualDescricao}
+                                        onChangeText={setServicoManualDescricao}
+                                    />
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        placeholder="Preço R$ (ex: 20.00)"
+                                        placeholderTextColor="#9A8E85"
+                                        keyboardType="numeric"
+                                        value={servicoManualValor}
+                                        onChangeText={setServicoManualValor}
+                                    />
+                                    <TouchableOpacity 
+                                        style={styles.btnAdicionarManual}
+                                        onPress={handleAdicionarServicoManual}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={styles.btnAdicionarManualText}>Adicionar Serviço Sob Medida</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                            </ScrollView>
+                        </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ─── MODAL: CÂMERA EM TELA CHEIA (SEM COMPONENTES FILHOS) ────────── */}
@@ -915,6 +1025,22 @@ export default function NovaOS() {
                 </View>
             )}
 
+            {/* ─── MODAL: PRÉ-VISUALIZAÇÃO DO COMPROVANTE ─────────────────── */}
+            <ModalComprovante
+                visible={showComprovante}
+                titulo="Comprovante da OS"
+                textoComprovante={textoComprovante}
+                telefoneWhatsApp={telefoneClienteComprovante}
+                onImprimir={() => {
+                    setShowComprovante(false);
+                    handleImprimirOS();
+                }}
+                onFechar={() => {
+                    setShowComprovante(false);
+                    router.replace('/(tabs)/ordens');
+                }}
+            />
+
             {/* ─── MODAL: SELEÇÃO DE IMPRESSORA ──────────────────────────────── */}
             <ModalImpressora
                 visible={showModalImpressora}
@@ -952,6 +1078,7 @@ const styles = StyleSheet.create({
     contentContainer: {
         padding: 16,
         paddingBottom: 40,
+        flexGrow: 1,
     },
     rowBetween: {
         flexDirection: 'row',

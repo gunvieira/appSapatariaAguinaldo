@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import StatusBadge from './StatusBadge';
 import { OrdemServico } from '../types';
+import { formatarTelefone, formatarReal } from '../utils/format';
 
 interface OSItemCardProps {
     os: OrdemServico;
@@ -17,9 +18,16 @@ export default function OSItemCard({ os, onPress }: OSItemCardProps) {
         <TouchableOpacity style={styles.card} onPress={onPress}>
             <View style={{ flex: 1 }}>
                 <View style={styles.headerRow}>
-                    <Text style={styles.clientName} numberOfLines={1}>
-                        {os.clienteNome}
-                    </Text>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                        <Text style={styles.clientName} numberOfLines={1}>
+                            {os.clienteNome}
+                        </Text>
+                        {os.clienteTelefone ? (
+                            <Text style={styles.phoneText}>
+                                {formatarTelefone(os.clienteTelefone)}
+                            </Text>
+                        ) : null}
+                    </View>
                     <StatusBadge status={os.status} />
                 </View>
                 <Text style={styles.detailsText} numberOfLines={1}>
@@ -27,11 +35,11 @@ export default function OSItemCard({ os, onPress }: OSItemCardProps) {
                 </Text>
                 <View style={styles.footerRow}>
                     <Text style={styles.totalLabel}>
-                        Total: <Text style={styles.totalVal}>R$ {valorTotal.toFixed(2)}</Text>
+                        Total: <Text style={styles.totalVal}>{formatarReal(valorTotal)}</Text>
                     </Text>
                     {os.sinal > 0 && (
                         <Text style={styles.sinalText}>
-                            Sinal pago: R$ {os.sinal.toFixed(2)}
+                            Sinal pago: {formatarReal(os.sinal)}
                         </Text>
                     )}
                 </View>
@@ -67,8 +75,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: 'bold',
         color: '#2C2520',
-        flex: 1,
-        marginRight: 10,
+    },
+    phoneText: {
+        fontSize: 11,
+        color: '#7A7067',
+        marginTop: 2,
     },
     detailsText: {
         fontSize: 12,

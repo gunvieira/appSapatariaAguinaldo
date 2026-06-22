@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { formatarTelefone } from '../utils/format';
 
 interface ClienteCardProps {
     nome: string;
@@ -14,7 +15,7 @@ export default function ClienteCard({ nome, whatsapp, onRemove }: ClienteCardPro
             <View style={styles.accentBar} />
             <View style={styles.infoWrapper}>
                 <Text style={styles.nomeText}>{nome}</Text>
-                <Text style={styles.whatsappText}>WhatsApp: {whatsapp}</Text>
+                <Text style={styles.whatsappText}>WhatsApp: {formatarTelefone(whatsapp)}</Text>
             </View>
             <TouchableOpacity 
                 style={styles.btnRemover} 

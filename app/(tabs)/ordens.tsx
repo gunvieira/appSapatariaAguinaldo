@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,7 +10,7 @@ import {
     RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getOrdens } from '../../src/services/ordemServicoService';
 import { OrdemServico, StatusOS } from '../../src/types';
@@ -20,6 +20,7 @@ type FiltroStatus = 'todos' | StatusOS;
 
 export default function ListaOrdens() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ status?: string }>();
 
     // ─── Estados ─────────────────────────────────────────────────────────────
     const [loading, setLoading] = useState(true);
@@ -27,6 +28,15 @@ export default function ListaOrdens() {
     const [ordens, setOrdens] = useState<OrdemServico[]>([]);
     const [searchText, setSearchText] = useState('');
     const [statusFilter, setStatusFilter] = useState<FiltroStatus>('todos');
+
+    // Sincronizar filtro vindo de fora (como o Dashboard)
+    useEffect(() => {
+        if (params.status) {
+            setStatusFilter(params.status as FiltroStatus);
+            // Limpa o parâmetro da URL para evitar que reative ao voltar na tela
+            router.setParams({ status: undefined });
+        }
+    }, [params.status]);
 
     // ─── Carregar Dados ──────────────────────────────────────────────────────
     const carregarDados = async () => {
@@ -55,8 +65,11 @@ export default function ListaOrdens() {
     // ─── Lógica de Filtro e Busca ──────────────────────────────────────────
     const getOrdensFiltradas = () => {
         return ordens.filter((os) => {
-            // Filtro por Status
-            const matchStatus = statusFilter === 'todos' || os.status === statusFilter;
+            // Filtro por Status: no filtro 'todos', não mostra entregues
+            const matchStatus = 
+                statusFilter === 'todos' 
+                    ? os.status !== 'entregue' 
+                    : os.status === statusFilter;
 
             // Filtro por Texto (Nome do cliente ou ID da OS)
             const text = searchText.trim().toLowerCase();
@@ -72,7 +85,7 @@ export default function ListaOrdens() {
 
     // Contador de ordens por status para exibir nos Chips
     const getCountStatus = (status: FiltroStatus) => {
-        if (status === 'todos') return ordens.length;
+        if (status === 'todos') return ordens.filter(os => os.status !== 'entregue').length;
         return ordens.filter(os => os.status === status).length;
     };
 

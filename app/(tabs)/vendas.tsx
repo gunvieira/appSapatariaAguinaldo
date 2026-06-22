@@ -16,18 +16,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getVendasDoDia, salvarVendaDireta } from '../../src/services/vendaService';
-import { VendaDiretaDoc, ItemVenda } from '../../src/types';
+import { getVendasDoDia, salvarVendaDireta, deletarVendaDireta } from '../../src/services/vendaService';
+import { VendaDiretaDoc, ItemVenda, FormaPagamento } from '../../src/types';
 import ModalImpressora from '../../src/components/ModalImpressora';
+import ModalComprovante from '../../src/components/ModalComprovante';
 import {
     getMacImpressora,
     salvarMacImpressora,
     limparMacImpressora,
     imprimirReciboVenda,
     VendaDiretaPrintData,
+    buildReciboVendaTexto,
 } from '../../src/services/printerService';
-
-type FormaPagamento = 'dinheiro' | 'pix' | 'cartao';
+import { formatarReal } from '../../src/utils/format';
 
 interface ItemVendaLocal {
     id: string;
@@ -38,13 +39,13 @@ interface ItemVendaLocal {
 const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
     dinheiro: 'Dinheiro',
     pix: 'PIX',
-    cartao: 'Cartão',
+    cartão: 'Cartão',
 };
 
 const FORMA_PAGAMENTO_ICONS: Record<FormaPagamento, string> = {
     dinheiro: 'cash-outline',
     pix: 'qr-code-outline',
-    cartao: 'card-outline',
+    cartão: 'card-outline',
 };
 
 function formatarHora(timestamp: any): string {
@@ -75,6 +76,10 @@ export default function Vendas() {
     const [showModalImpressora, setShowModalImpressora] = useState(false);
     const [pendingVendaPrintData, setPendingVendaPrintData] = useState<VendaDiretaPrintData | null>(null);
     const [imprimindo, setImprimindo] = useState(false);
+
+    // Pré-visualização do comprovante
+    const [showComprovante, setShowComprovante] = useState(false);
+    const [textoComprovante, setTextoComprovante] = useState('');
 
     // ─── Carregar Dados ───────────────────────────────────────────────────────
     const carregarDados = async () => {
@@ -192,14 +197,10 @@ export default function Vendas() {
             handleFecharModal();
             await carregarDados();
 
-            Alert.alert(
-                '\u2705 Venda Registrada!',
-                `Total: R$ ${valorTotal.toFixed(2)}\n\nDeseja imprimir o comprovante?`,
-                [
-                    { text: 'N\u00e3o', style: 'cancel' },
-                    { text: '\u{1F5A8}\uFE0F Imprimir', onPress: handleImprimirVenda },
-                ]
-            );
+            // Gerar texto limpo e abrir modal de pré-visualização
+            const texto = buildReciboVendaTexto(vendaPrintData);
+            setTextoComprovante(texto);
+            setShowComprovante(true);
         } catch (error) {
             Alert.alert('Erro', 'N\u00e3o foi poss\u00edvel registrar a venda. Tente novamente.');
         } finally {
@@ -253,6 +254,35 @@ export default function Vendas() {
         }
     };
 
+    const handleExcluirVenda = (id: string, valor: number) => {
+        Alert.alert(
+            'Excluir Venda',
+            `Tem certeza que deseja excluir permanentemente esta venda de ${formatarReal(valor)}? Esta ação não pode ser desfeita.`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Excluir',
+                    style: 'destructive',
+                    onPress: () => executarExclusaoVenda(id),
+                },
+            ]
+        );
+    };
+
+    const executarExclusaoVenda = async (id: string) => {
+        try {
+            setLoading(true);
+            await deletarVendaDireta(id);
+            Alert.alert('Sucesso', 'Venda excluída com sucesso!');
+            await carregarDados();
+        } catch (error) {
+            console.error('Erro ao excluir venda:', error);
+            Alert.alert('Erro', 'Não foi possível excluir a venda. Tente novamente.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // ─── Renderização de cada venda na lista ──────────────────────────────────
     const renderVendaCard = ({ item }: { item: VendaDiretaDoc }) => {
         const hora = formatarHora(item.createdAt);
@@ -296,7 +326,16 @@ export default function Vendas() {
                             <Text style={styles.vendaPagText}>{label}</Text>
                             {hora ? <Text style={styles.vendaHoraText}> · {hora}</Text> : null}
                         </View>
-                        <Text style={styles.vendaValor}>R$ {item.valor_total.toFixed(2)}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={styles.vendaValor}>{formatarReal(item.valor_total)}</Text>
+                            <TouchableOpacity 
+                                onPress={() => handleExcluirVenda(item.id, item.valor_total)}
+                                style={{ marginLeft: 12, padding: 4 }}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="trash-outline" size={18} color="#C0392B" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </View>
@@ -333,7 +372,7 @@ export default function Vendas() {
                             </View>
                         </View>
                         <View style={styles.totalDiaRight}>
-                            <Text style={styles.totalDiaValor}>R$ {totalDoDia.toFixed(2)}</Text>
+                            <Text style={styles.totalDiaValor}>{formatarReal(totalDoDia)}</Text>
                         </View>
                     </View>
                 </View>
@@ -407,6 +446,7 @@ export default function Vendas() {
 
                             <ScrollView
                                 style={styles.modalScroll}
+                                contentContainerStyle={{ flexGrow: 1 }}
                                 keyboardShouldPersistTaps="handled"
                                 showsVerticalScrollIndicator={false}
                             >
@@ -467,7 +507,7 @@ export default function Vendas() {
                                 <View style={styles.modalSection}>
                                     <Text style={styles.modalSectionTitle}>Forma de Pagamento</Text>
                                     <View style={styles.pagamentoRow}>
-                                        {(['dinheiro', 'pix', 'cartao'] as FormaPagamento[]).map((forma) => {
+                                        {(['dinheiro', 'pix', 'cartão'] as FormaPagamento[]).map((forma) => {
                                             const isActive = formaPagamento === forma;
                                             return (
                                                 <TouchableOpacity
@@ -505,7 +545,7 @@ export default function Vendas() {
                                         <View style={styles.resumoTotalWrapper}>
                                             <Text style={styles.resumoTotalLabel}>Total</Text>
                                             <Text style={styles.resumoTotalValor}>
-                                                R$ {calcularTotalModal().toFixed(2)}
+                                                {formatarReal(calcularTotalModal())}
                                             </Text>
                                         </View>
                                     </View>
@@ -549,6 +589,18 @@ export default function Vendas() {
                     setShowModalImpressora(false);
                     await executarImpressaoVenda(device.address);
                 }}
+            />
+
+            {/* ─── MODAL: PRÉ-VISUALIZAÇÃO DO COMPROVANTE ─────────────────── */}
+            <ModalComprovante
+                visible={showComprovante}
+                titulo="Comprovante de Venda"
+                textoComprovante={textoComprovante}
+                onImprimir={() => {
+                    setShowComprovante(false);
+                    handleImprimirVenda();
+                }}
+                onFechar={() => setShowComprovante(false)}
             />
 
             {/* Overlay de impressão */}

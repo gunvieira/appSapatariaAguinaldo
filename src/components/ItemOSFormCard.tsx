@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Servico } from '../types';
+import { formatarReal } from '../utils/format';
 
 interface ItemOSFormCardProps {
     index: number;
@@ -28,8 +29,30 @@ export default function ItemOSFormCard({
     onAddServicoClick,
     onRemoveServico
 }: ItemOSFormCardProps) {
+    const [fotoZoom, setFotoZoom] = useState<string | null>(null);
+
     return (
         <View style={styles.card}>
+            {/* Modal de Zoom da Foto */}
+            <Modal
+                visible={!!fotoZoom}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setFotoZoom(null)}
+            >
+                <View style={styles.zoomOverlay}>
+                    <TouchableOpacity 
+                        style={styles.zoomCloseBtn}
+                        onPress={() => setFotoZoom(null)}
+                    >
+                        <Ionicons name="close" size={30} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    {fotoZoom && (
+                        <Image source={{ uri: fotoZoom }} style={styles.zoomImage} />
+                    )}
+                </View>
+            </Modal>
+
             {/* Header do Item */}
             <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Item #{index + 1}</Text>
@@ -47,37 +70,38 @@ export default function ItemOSFormCard({
                 onChangeText={onChangeDescricao}
             />
 
-            {/* Fotos de Entrada (Exige exatamente 2) */}
-            <Text style={styles.subLabel}>Fotos de Entrada (Exige exatamente 2)</Text>
+            {/* Fotos de Entrada (Máximo 3) */}
+            <Text style={styles.subLabel}>Fotos de Entrada (Máximo 3)</Text>
             <View style={styles.photoContainer}>
-                {[0, 1].map((photoIndex) => {
-                    const photoUri = fotosEntrada[photoIndex];
-                    return (
-                        <View key={photoIndex} style={styles.photoSlot}>
-                            {photoUri ? (
-                                <View style={{ flex: 1 }}>
-                                    <Image source={{ uri: photoUri }} style={styles.photoImage} />
-                                    <TouchableOpacity 
-                                        style={styles.btnDeletePhoto}
-                                        onPress={() => onRemovePhoto(photoIndex)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Ionicons name="close-circle" size={22} color="#C0392B" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <TouchableOpacity 
-                                    style={styles.btnTakePhoto}
-                                    onPress={() => onTakePhoto(photoIndex)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Ionicons name="camera-outline" size={26} color="#8C6239" />
-                                    <Text style={styles.takePhotoText}>Tirar Foto {photoIndex + 1}</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    );
-                })}
+                {fotosEntrada.map((photoUri, photoIndex) => (
+                    <View key={photoIndex} style={styles.photoSlot}>
+                        <TouchableOpacity 
+                            style={{ flex: 1 }} 
+                            onPress={() => setFotoZoom(photoUri)}
+                            activeOpacity={0.9}
+                        >
+                            <Image source={{ uri: photoUri }} style={styles.photoImage} />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.btnDeletePhoto}
+                            onPress={() => onRemovePhoto(photoIndex)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="close-circle" size={20} color="#C0392B" />
+                        </TouchableOpacity>
+                    </View>
+                ))}
+                
+                {fotosEntrada.length < 3 && (
+                    <TouchableOpacity 
+                        style={[styles.photoSlot, styles.btnTakePhoto]}
+                        onPress={() => onTakePhoto(fotosEntrada.length)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="camera-outline" size={24} color="#8C6239" />
+                        <Text style={styles.takePhotoText}>Tirar Foto</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Serviços do Item */}
@@ -99,7 +123,7 @@ export default function ItemOSFormCard({
                         <View key={serv.id} style={styles.servicoItemRow}>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.servicoDescText}>{serv.descricao}</Text>
-                                <Text style={styles.servicoValorText}>R$ {serv.valor.toFixed(2)}</Text>
+                                <Text style={styles.servicoValorText}>{formatarReal(serv.valor)}</Text>
                             </View>
                             <TouchableOpacity 
                                 onPress={() => onRemoveServico(servIndex)}
@@ -165,28 +189,30 @@ const styles = StyleSheet.create({
     },
     photoContainer: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        flexWrap: 'wrap',
         marginTop: 4,
     },
     photoSlot: {
-        width: '48%',
-        aspectRatio: 1.2,
+        width: '31%',
+        aspectRatio: 1.0,
         backgroundColor: '#FAF9F6',
         borderRadius: 8,
         borderWidth: 1,
         borderColor: '#E2DCD5',
         overflow: 'hidden',
+        marginRight: 6,
+        marginBottom: 8,
     },
     btnTakePhoto: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        borderStyle: 'dashed',
         padding: 10,
     },
     takePhotoText: {
         color: '#7A7067',
-        fontSize: 11,
-        marginTop: 6,
+        fontSize: 10,
+        marginTop: 4,
         fontWeight: '500',
     },
     photoImage: {
@@ -195,10 +221,10 @@ const styles = StyleSheet.create({
     },
     btnDeletePhoto: {
         position: 'absolute',
-        top: 6,
-        right: 6,
+        top: 4,
+        right: 4,
         backgroundColor: 'rgba(255,255,255,0.85)',
-        borderRadius: 12,
+        borderRadius: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
@@ -262,5 +288,27 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         textAlign: 'center',
         marginVertical: 10,
+    },
+    
+    // Zoom Modal
+    zoomOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    zoomCloseBtn: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 50 : 30,
+        right: 20,
+        zIndex: 10,
+        padding: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 25,
+    },
+    zoomImage: {
+        width: '95%',
+        height: '80%',
+        resizeMode: 'contain',
     },
 });

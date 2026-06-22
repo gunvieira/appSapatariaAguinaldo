@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, Timestamp, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, deleteDoc, query, orderBy, Timestamp, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ItemVenda, VendaDiretaDoc, FormaPagamento } from '../types';
 
@@ -38,4 +38,10 @@ export async function getVendasDoDia(): Promise<VendaDiretaDoc[]> {
             createdAt: data.createdAt,
         } as VendaDiretaDoc;
     });
+}
+
+// deletar venda
+export async function deletarVendaDireta(id: string): Promise<void> {
+    const docRef = doc(db, VENDAS_COL, id);
+    await deleteDoc(docRef);
 }

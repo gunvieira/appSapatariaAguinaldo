@@ -17,6 +17,7 @@ import { DashboardMetrics } from '../../src/types';
 import { OrdemServico } from '../../src/types';
 import MetricCard from '../../src/components/MetricCard';
 import OSItemCard from '../../src/components/OSItemCard';
+import { formatarReal } from '../../src/utils/format';
 
 export default function Dashboard() {
     const router = useRouter();
@@ -145,10 +146,11 @@ export default function Dashboard() {
                 {/* ─── CARD FINANCEIRO DIÁRIO ───────────────────────────────────── */}
                 <MetricCard 
                     title="Caixa de Hoje"
-                    value={`R$ ${metrics.faturamentoHoje.toFixed(2)}`}
+                    value={formatarReal(metrics.faturamentoHoje)}
                     subtitle="Sinais de novas OS + vendas rápidas de balcão"
                     iconName="cash-outline"
                     isHighlight={true}
+                    onPress={() => router.push('/(tabs)/caixa')}
                 />
 
                 {/* ─── GRADE DE METRICAS OPERACIONAIS ───────────────────────────── */}
@@ -159,6 +161,8 @@ export default function Dashboard() {
                             value={totalAtivas}
                             subtitle={`${metrics.osAguardando} aguardam | ${metrics.osEmConserto} conserto`}
                             iconName="construct-outline"
+                            style={{ flex: 1 }}
+                            onPress={() => router.push('/(tabs)/ordens?status=em_conserto')}
                         />
                     </View>
                     <View style={{ flex: 1, marginLeft: 6 }}>
@@ -167,6 +171,8 @@ export default function Dashboard() {
                             value={metrics.osPronto}
                             subtitle="Aguardando retirada do cliente"
                             iconName="checkmark-circle-outline"
+                            style={{ flex: 1 }}
+                            onPress={() => router.push('/(tabs)/ordens?status=pronto')}
                         />
                     </View>
                 </View>

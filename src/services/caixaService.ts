@@ -37,7 +37,7 @@ export async function getDadosCaixaDoDia(): Promise<DadosCaixaDoDia> {
     const somar = (forma: string, valor: number) => {
         if (forma === 'dinheiro') totalDinheiro += valor;
         else if (forma === 'pix') totalPix += valor;
-        else if (forma === 'cartao') totalCartao += valor;
+        else if (forma === 'cartão' || forma === 'cartao') totalCartao += valor;
     };
 
     // OS Abertas Hoje (Sinal)

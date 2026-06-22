@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 
 // ─── Formas de pagamento ───────────────────────────────────────────────────
-export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao';
+export type FormaPagamento = 'dinheiro' | 'pix' | 'cartão';
 
 // ─── Status da Ordem de Serviço ────────────────────────────────────────────
 export type StatusOS = 'aguardando' | 'em_conserto' | 'pronto' | 'entregue';

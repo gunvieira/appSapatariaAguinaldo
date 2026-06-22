@@ -1,4 +1,4 @@
-import { collection, addDoc, getDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, limit } from 'firebase/firestore';
+import { collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { OrdemServico, FormaPagamento, StatusOS } from '../types';
 
@@ -43,4 +43,19 @@ export async function atualizarStatusOS(osId: string, novoStatus: StatusOS, form
     };
     if (formaPagamentoSaldo) updates.formaPagamentoSaldo = formaPagamentoSaldo;
     await updateDoc(osRef, updates);
+}
+
+// atualizar dados gerais da OS
+export async function atualizarOS(osId: string, dadosAtualizados: Partial<Omit<OrdemServico, 'id' | 'createdAt'>>): Promise<void> {
+    const osRef = doc(db, ORDENS_COL, osId);
+    await updateDoc(osRef, {
+        ...dadosAtualizados,
+        updatedAt: Timestamp.now(),
+    });
+}
+
+// deletar OS
+export async function deletarOS(osId: string): Promise<void> {
+    const osRef = doc(db, ORDENS_COL, osId);
+    await deleteDoc(osRef);
 }

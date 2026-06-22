@@ -95,7 +95,8 @@ const formatarData = (createdAt?: { toDate?: () => Date }): string => {
 const FORMA_LABEL: Record<string, string> = {
     dinheiro: 'Dinheiro',
     pix: 'PIX',
-    cartao: 'Cartao',
+    cartão: 'Cartão',
+    cartao: 'Cartão',
 };
 
 // ─── Builder: Recibo de OS — via loja (controle) ou via cliente ───────────────
@@ -339,4 +340,146 @@ export async function imprimirReciboRetiradaOS(mac: string, dados: OSPrintData, 
         console.error('Erro ao imprimir quitacao de OS:', error);
         return false;
     }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BUILDERS DE TEXTO LIMPO — para pré-visualização na tela e WhatsApp
+// (sem comandos ESC/POS, formatados para leitura humana)
+// ════════════════════════════════════════════════════════════════════════════
+
+const SEP_TEXT = '--------------------------------';
+
+const formatLinhaTexto = (nome: string, valor: number, maxWidth = 32): string => {
+    const valorStr = `R$ ${valor.toFixed(2).replace('.', ',')}`;
+    const maxNome = maxWidth - valorStr.length - 1;
+    const nomeFormatado = nome.length > maxNome ? nome.substring(0, maxNome) : nome;
+    const espacos = maxWidth - nomeFormatado.length - valorStr.length;
+    return nomeFormatado + ' '.repeat(Math.max(0, espacos)) + valorStr;
+};
+
+export function buildReciboOSTexto(dados: OSPrintData): string {
+    const idCurto = dados.id.substring(Math.max(0, dados.id.length - 6)).toUpperCase();
+    const valorTotal = dados.sinal + dados.saldo;
+    const linhas: string[] = [];
+
+    linhas.push('');
+    linhas.push('   SAPATARIA AGUINALDO');
+    linhas.push(' Reparos e Consertos em Geral');
+    linhas.push(SEP_TEXT);
+    linhas.push('      === VIA CLIENTE ===');
+    linhas.push(SEP_TEXT);
+    linhas.push(`OS: #${idCurto}`);
+    linhas.push(`Cliente: ${dados.clienteNome}`);
+    if (dados.clienteTelefone) linhas.push(`Fone: ${dados.clienteTelefone}`);
+    linhas.push(`Data: ${formatarData(dados.createdAt)}`);
+    linhas.push(SEP_TEXT);
+    linhas.push('SERVICOS:');
+    dados.itens.forEach((item, idx) => {
+        linhas.push(`${idx + 1}. ${item.descricao}`);
+        item.servicos.forEach((serv) => {
+            linhas.push('   ' + formatLinhaTexto(serv.descricao, serv.valor));
+        });
+    });
+    linhas.push(SEP_TEXT);
+    linhas.push(formatLinhaTexto('Subtotal:', valorTotal));
+    linhas.push(formatLinhaTexto('Sinal pago:', dados.sinal));
+    linhas.push('');
+    linhas.push(`   SALDO: R$ ${dados.saldo.toFixed(2).replace('.', ',')}`);
+    linhas.push('');
+    linhas.push(`Pgto. sinal: ${FORMA_LABEL[dados.formaPagamentoSinal] || dados.formaPagamentoSinal}`);
+    linhas.push(SEP_TEXT);
+    linhas.push(' Guarde este recibo para');
+    linhas.push(' retirada do seu calcado.');
+    linhas.push(' Obrigado pela preferencia!');
+    linhas.push('');
+
+    return linhas.join('\n');
+}
+
+export function buildReciboVendaTexto(dados: VendaDiretaPrintData): string {
+    const linhas: string[] = [];
+
+    linhas.push('');
+    linhas.push('   SAPATARIA AGUINALDO');
+    linhas.push(' Reparos e Consertos em Geral');
+    linhas.push(SEP_TEXT);
+    linhas.push('       VENDA DIRETA');
+    linhas.push(`${formatarData(dados.createdAt)}`);
+    linhas.push(SEP_TEXT);
+    dados.itens.forEach((item) => {
+        linhas.push(formatLinhaTexto(item.descricao, item.valor));
+    });
+    linhas.push(SEP_TEXT);
+    linhas.push(`   TOTAL: R$ ${dados.valor_total.toFixed(2).replace('.', ',')}`);
+    linhas.push('');
+    linhas.push(`Pagamento: ${FORMA_LABEL[dados.formaPagamento] || dados.formaPagamento}`);
+    linhas.push(SEP_TEXT);
+    linhas.push(' Obrigado pela preferencia!');
+    linhas.push('');
+
+    return linhas.join('\n');
+}
+
+export function buildReciboRetiradaTexto(dados: OSPrintData, formaPagamentoSaldo: string): string {
+    const idCurto = dados.id.substring(Math.max(0, dados.id.length - 6)).toUpperCase();
+    const total = dados.sinal + dados.saldo;
+    const linhas: string[] = [];
+
+    linhas.push('');
+    linhas.push('   SAPATARIA AGUINALDO');
+    linhas.push(' Reparos e Consertos em Geral');
+    linhas.push(SEP_TEXT);
+    linhas.push('     QUITACAO DE OS');
+    linhas.push('     === VIA CLIENTE ===');
+    linhas.push(SEP_TEXT);
+    linhas.push(`OS: #${idCurto}`);
+    linhas.push(`Cliente: ${dados.clienteNome}`);
+    linhas.push(`Retirada: ${formatarData(undefined)}`);
+    linhas.push(SEP_TEXT);
+    linhas.push('SERVICOS ENTREGUES:');
+    dados.itens.forEach((item, idx) => {
+        linhas.push(`${idx + 1}. ${item.descricao}`);
+        item.servicos.forEach((serv) => {
+            linhas.push('   ' + formatLinhaTexto(serv.descricao, serv.valor));
+        });
+    });
+    linhas.push(SEP_TEXT);
+    linhas.push(formatLinhaTexto('Valor Total:', total));
+    linhas.push(formatLinhaTexto('Sinal Pago:', dados.sinal));
+    linhas.push('');
+    linhas.push(`   PAGO RETIRADA: R$ ${dados.saldo.toFixed(2).replace('.', ',')}`);
+    linhas.push('');
+    linhas.push(`Pgto. retirada: ${FORMA_LABEL[formaPagamentoSaldo] || formaPagamentoSaldo}`);
+    linhas.push(SEP_TEXT);
+    linhas.push(' Calcado entregue.');
+    linhas.push(' Obrigado pela preferencia!');
+    linhas.push('');
+
+    return linhas.join('\n');
+}
+
+export function buildReciboFechamentoTexto(dados: Omit<FechamentoCaixa, 'id'> & { data?: any }): string {
+    const linhas: string[] = [];
+
+    linhas.push('');
+    linhas.push('   SAPATARIA AGUINALDO');
+    linhas.push(' Reparos e Consertos em Geral');
+    linhas.push(SEP_TEXT);
+    linhas.push('    FECHAMENTO DE CAIXA');
+    linhas.push(`Data: ${formatarData(dados.data)}`);
+    linhas.push(SEP_TEXT);
+    linhas.push(formatLinhaTexto('Dinheiro:', dados.totalDinheiro));
+    linhas.push(formatLinhaTexto('PIX:', dados.totalPix));
+    linhas.push(formatLinhaTexto('Cartao:', dados.totalCartao));
+    linhas.push('');
+    linhas.push(`  TOTAL: R$ ${dados.totalGeral.toFixed(2).replace('.', ',')}`);
+    linhas.push('');
+    linhas.push(SEP_TEXT);
+    linhas.push(`OS com pagamento: ${dados.quantidadeOS}`);
+    linhas.push(`Vendas diretas:   ${dados.quantidadeVendas}`);
+    linhas.push(SEP_TEXT);
+    linhas.push(' Caixa fechado com sucesso.');
+    linhas.push('');
+
+    return linhas.join('\n');
 }

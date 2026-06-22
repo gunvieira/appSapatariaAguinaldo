@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface MetricCardProps {
@@ -8,6 +8,8 @@ interface MetricCardProps {
     subtitle: string;
     iconName: string;
     isHighlight?: boolean;
+    style?: any;
+    onPress?: () => void;
 }
 
 export default function MetricCard({ 
@@ -15,13 +17,22 @@ export default function MetricCard({
     value, 
     subtitle, 
     iconName, 
-    isHighlight = false 
+    isHighlight = false,
+    style,
+    onPress
 }: MetricCardProps) {
+    const Container = onPress ? TouchableOpacity : View;
+
     return (
-        <View style={[
-            styles.card,
-            isHighlight ? styles.highlightCard : styles.defaultCard
-        ]}>
+        <Container 
+            onPress={onPress}
+            activeOpacity={0.7}
+            style={[
+                styles.card,
+                isHighlight ? styles.highlightCard : styles.defaultCard,
+                style
+            ]}
+        >
             <View style={styles.headerRow}>
                 <View style={[
                     styles.iconWrapper,
@@ -33,26 +44,38 @@ export default function MetricCard({
                         color={isHighlight ? '#FAF9F6' : '#8C6239'} 
                     />
                 </View>
-                <Text style={[
-                    styles.title,
-                    isHighlight ? styles.highlightText : styles.defaultTitleText
-                ]}>
+                <Text 
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={[
+                        styles.title,
+                        isHighlight ? styles.highlightText : styles.defaultTitleText
+                    ]}
+                >
                     {title}
                 </Text>
             </View>
-            <Text style={[
-                styles.value,
-                isHighlight ? styles.highlightText : styles.defaultValText
-            ]}>
+            <Text 
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={[
+                    styles.value,
+                    isHighlight ? styles.highlightText : styles.defaultValText
+                ]}
+            >
                 {value}
             </Text>
-            <Text style={[
-                styles.subtitle,
-                isHighlight ? styles.highlightSubtext : styles.defaultSubtext
-            ]}>
+            <Text 
+                numberOfLines={2}
+                ellipsizeMode="tail"
+                style={[
+                    styles.subtitle,
+                    isHighlight ? styles.highlightSubtext : styles.defaultSubtext
+                ]}
+            >
                 {subtitle}
             </Text>
-        </View>
+        </Container>
     );
 }
 
@@ -98,6 +121,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: 8,
         letterSpacing: 0.3,
+        flex: 1,
     },
     defaultTitleText: {
         color: '#7A7067',
