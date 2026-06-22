@@ -53,6 +53,19 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
+                name="clientes"
+                options={{ 
+                    title: 'Clientes',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons 
+                            name={focused ? "people" : "people-outline"} 
+                            size={size} 
+                            color={color} 
+                        />
+                    )
+                }}
+            />
+            <Tabs.Screen
                 name="vendas"
                 options={{ 
                     title: 'Vendas',

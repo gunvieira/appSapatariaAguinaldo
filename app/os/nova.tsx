@@ -9,8 +9,8 @@ import {
     ActivityIndicator,
     Alert,
     Modal,
-    KeyboardAvoidingView,
     Platform,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -583,11 +583,7 @@ export default function NovaOS() {
     const hasSinal = sinalVal > 0;
 
     return (
-        <KeyboardAvoidingView
-            style={{ flex: 1, backgroundColor: '#FAF9F6' }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
+        <View style={{ flex: 1, backgroundColor: '#FAF9F6' }}>
             <Stack.Screen options={{ title: id ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço' }} />
             <ScrollView 
                 style={styles.container} 
@@ -779,16 +775,18 @@ export default function NovaOS() {
                 visible={showNovoClienteModal}
                 animationType="fade"
                 transparent={true}
+                statusBarTranslucent={true}
                 onRequestClose={() => setShowNovoClienteModal(false)}
             >
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={{ flex: 1 }}
+                    keyboardVerticalOffset={0}
                 >
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalBox}>
                             <Text style={styles.modalTitle}>Cadastrar Novo Cliente</Text>
-                            
+
                             <Text style={styles.inputLabel}>Nome Completo:</Text>
                             <TextInput
                                 style={styles.modalInput}
@@ -796,6 +794,8 @@ export default function NovaOS() {
                                 placeholderTextColor="#9A8E85"
                                 value={novoClienteNome}
                                 onChangeText={setNovoClienteNome}
+                                autoCapitalize="words"
+                                returnKeyType="next"
                             />
 
                             <Text style={styles.inputLabel}>WhatsApp/Telefone:</Text>
@@ -806,16 +806,17 @@ export default function NovaOS() {
                                 keyboardType="phone-pad"
                                 value={novoClienteWhatsapp}
                                 onChangeText={(text) => setNovoClienteWhatsapp(aplicarMascaraTelefone(text))}
+                                returnKeyType="done"
                             />
 
                             <View style={styles.modalActions}>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={[styles.modalBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
                                     onPress={() => setShowNovoClienteModal(false)}
                                 >
                                     <Text style={[styles.modalBtnText, { color: '#7A7067' }]}>Cancelar</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={[styles.modalBtn, { backgroundColor: '#8C6239' }]}
                                     onPress={handleCriarCliente}
                                 >
@@ -840,6 +841,7 @@ export default function NovaOS() {
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={{ flex: 1 }}
+                    keyboardVerticalOffset={0}
                 >
                     <View style={styles.modalOverlay}>
                         <View style={[styles.modalBox, { height: 550, maxHeight: '85%', width: '90%' }]}>
@@ -1066,7 +1068,7 @@ export default function NovaOS() {
                     </View>
                 </View>
             )}
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 

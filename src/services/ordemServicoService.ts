@@ -1,4 +1,4 @@
-import { collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, limit } from 'firebase/firestore';
+import { collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, limit, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { OrdemServico, FormaPagamento, StatusOS } from '../types';
 
@@ -59,3 +59,14 @@ export async function deletarOS(osId: string): Promise<void> {
     const osRef = doc(db, ORDENS_COL, osId);
     await deleteDoc(osRef);
 }
+
+// buscar OS por clienteId
+export async function getOrdensByClienteId(clienteId: string): Promise<OrdemServico[]> {
+    const q = query(
+        collection(db, ORDENS_COL),
+        where('clienteId', '==', clienteId),
+        orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrdemServico));
+}

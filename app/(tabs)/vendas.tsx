@@ -422,11 +422,12 @@ export default function Vendas() {
                 transparent={true}
                 onRequestClose={handleFecharModal}
             >
-                <View style={styles.modalBackdrop}>
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                        style={styles.modalSheetWrapper}
-                    >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                    keyboardVerticalOffset={0}
+                >
+                    <View style={styles.modalBackdrop}>
                         <View style={styles.modalSheet}>
 
                             {/* Handle visual */}
@@ -572,8 +573,8 @@ export default function Vendas() {
                                 <View style={{ height: 24 }} />
                             </ScrollView>
                         </View>
-                    </KeyboardAvoidingView>
-                </View>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ─── MODAL: SELEÇÃO DE IMPRESSORA ──────────────────────── */}
