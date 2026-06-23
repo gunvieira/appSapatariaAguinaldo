@@ -9,9 +9,9 @@ import {
     ActivityIndicator,
     Modal,
     ScrollView,
-    KeyboardAvoidingView,
     Platform,
     Alert,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -423,7 +423,7 @@ export default function Vendas() {
                 onRequestClose={handleFecharModal}
             >
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior="padding"
                     style={{ flex: 1 }}
                     keyboardVerticalOffset={0}
                 >

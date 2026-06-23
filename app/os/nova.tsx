@@ -779,7 +779,7 @@ export default function NovaOS() {
                 onRequestClose={() => setShowNovoClienteModal(false)}
             >
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior="padding"
                     style={{ flex: 1 }}
                     keyboardVerticalOffset={0}
                 >
@@ -839,7 +839,7 @@ export default function NovaOS() {
                 }}
             >
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior="padding"
                     style={{ flex: 1 }}
                     keyboardVerticalOffset={0}
                 >

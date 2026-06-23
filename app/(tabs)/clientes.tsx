@@ -11,9 +11,9 @@ import {
     Modal,
     Alert,
     ScrollView,
-    KeyboardAvoidingView,
     Platform,
     Pressable,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -367,7 +367,7 @@ export default function ClientesScreen() {
                 onRequestClose={() => !salvando && setModalFormVisible(false)}
             >
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior="padding"
                     style={{ flex: 1 }}
                     keyboardVerticalOffset={0}
                 >
