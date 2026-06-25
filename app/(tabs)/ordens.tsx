@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getOrdens } from '../../src/services/ordemServicoService';
+import { reloadSignal } from '../../src/utils/reloadSignal';
 import { OrdemServico, StatusOS } from '../../src/types';
 import OSItemCard from '../../src/components/OSItemCard';
 
@@ -53,7 +54,10 @@ export default function ListaOrdens() {
 
     useFocusEffect(
         useCallback(() => {
-            carregarDados();
+            if (reloadSignal.ordens) {
+                carregarDados();
+                reloadSignal.ordens = false;
+            }
         }, [])
     );
 

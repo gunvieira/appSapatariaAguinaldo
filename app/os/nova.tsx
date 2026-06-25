@@ -18,13 +18,15 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { uploadFoto} from '../../src/services/storageService';
 import {salvarOS, getOSById, atualizarOS} from '../../src/services/ordemServicoService';
-import {getClientes, addCliente} from '../../src/services/clienteService';
-import { getCatalogo, addServicoCatalogo} from '../../src/services/catalogoService';
+import {getClientes} from '../../src/services/clienteService';
+import { getCatalogo } from '../../src/services/catalogoService';
 import { Cliente, CatalogoServico, Servico, StatusOS } from '../../src/types';
 import ClienteCard from '../../src/components/ClienteCard';
 import ItemOSFormCard from '../../src/components/ItemOSFormCard';
 import ModalImpressora from '../../src/components/ModalImpressora';
 import ModalComprovante from '../../src/components/ModalComprovante';
+import ModalNovoCliente from '../../src/components/ModalNovoCliente';
+import ModalSelecionarServico from '../../src/components/ModalSelecionarServico';
 import {
     getMacImpressora,
     salvarMacImpressora,
@@ -55,8 +57,8 @@ export default function NovaOS() {
     const [searchClienteText, setSearchClienteText] = useState('');
     const [showClienteList, setShowClienteList] = useState(false);
     const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
-    const [novoClienteNome, setNovoClienteNome] = useState('');
-    const [novoClienteWhatsapp, setNovoClienteWhatsapp] = useState('');
+    const [tempClienteNome, setTempClienteNome] = useState('');
+    const [tempClienteWhatsapp, setTempClienteWhatsapp] = useState('');
     
     // Itens da OS
     const [itens, setItens] = useState<Array<{
@@ -75,11 +77,6 @@ export default function NovaOS() {
     const [catalogo, setCatalogo] = useState<CatalogoServico[]>([]);
     const [showServicoModal, setShowServicoModal] = useState(false);
     const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
-    const [showNovoServicoForm, setShowNovoServicoForm] = useState(false);
-    const [novoServicoDescricao, setNovoServicoDescricao] = useState('');
-    const [novoServicoValor, setNovoServicoValor] = useState('');
-    const [servicoManualDescricao, setServicoManualDescricao] = useState('');
-    const [servicoManualValor, setServicoManualValor] = useState('');
 
     // Câmera
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -185,29 +182,7 @@ export default function NovaOS() {
         setShowClienteList(false);
     };
 
-    const handleCriarCliente = async () => {
-        if (!novoClienteNome.trim() || !novoClienteWhatsapp.trim()) {
-            Alert.alert('Aviso', 'Preencha todos os campos do cliente.');
-            return;
-        }
-        try {
-            setLoading(true);
-            const rawWhatsapp = limparMascaraTelefone(novoClienteWhatsapp);
-            const novoCliente = await addCliente(novoClienteNome.trim(), rawWhatsapp);
-            
-            setClientes(prev => [novoCliente, ...prev].sort((a, b) => a.nome.localeCompare(b.nome)));
-            setSelectedCliente(novoCliente);
-            
-            setNovoClienteNome('');
-            setNovoClienteWhatsapp('');
-            setShowNovoClienteModal(false);
-            Alert.alert('Sucesso', 'Cliente cadastrado com sucesso!');
-        } catch (error) {
-            Alert.alert('Erro', 'Não foi possível cadastrar o cliente.');
-        } finally {
-            setLoading(false);
-        }
-    };
+
 
     // ─── Gerenciamento de Itens da OS ────────────────────────────────────────
     const handleAdicionarItem = () => {
@@ -324,64 +299,23 @@ export default function NovaOS() {
         setActiveItemIndex(null);
     };
 
-    const handleAdicionarServicoManual = () => {
+    const handleSelectServicoManual = (descricao: string, valor: number) => {
         if (activeItemIndex === null) return;
-        if (!servicoManualDescricao.trim() || !servicoManualValor.trim()) {
-            Alert.alert('Aviso', 'Preencha a descrição e valor do serviço manual.');
-            return;
-        }
-
-        const valorNum = parseFloat(servicoManualValor.replace(',', '.'));
-        if (isNaN(valorNum) || valorNum <= 0) {
-            Alert.alert('Aviso', 'Digite um valor numérico válido.');
-            return;
-        }
-
         const novoServico: Servico = {
             id: `manual_${Date.now()}`,
-            descricao: servicoManualDescricao.trim(),
-            valor: valorNum
+            descricao,
+            valor
         };
-
         setItens(prev => {
             const copy = [...prev];
             copy[activeItemIndex].servicos = [...copy[activeItemIndex].servicos, novoServico];
             return copy;
         });
-
-        setServicoManualDescricao('');
-        setServicoManualValor('');
-        setShowServicoModal(false);
         setActiveItemIndex(null);
     };
 
-    const handleCriarServicoCatalogo = async () => {
-        if (!novoServicoDescricao.trim() || !novoServicoValor.trim()) {
-            Alert.alert('Aviso', 'Preencha a descrição e o preço do serviço.');
-            return;
-        }
-
-        const valorNum = parseFloat(novoServicoValor.replace(',', '.'));
-        if (isNaN(valorNum) || valorNum <= 0) {
-            Alert.alert('Aviso', 'Digite um valor numérico válido.');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const novoServico = await addServicoCatalogo(novoServicoDescricao.trim(), valorNum);
-            
-            setCatalogo(prev => [novoServico, ...prev].sort((a, b) => a.descricao.localeCompare(b.descricao)));
-            
-            setNovoServicoDescricao('');
-            setNovoServicoValor('');
-            setShowNovoServicoForm(false);
-            Alert.alert('Sucesso', 'Serviço adicionado ao catálogo!');
-        } catch (error) {
-            Alert.alert('Erro', 'Não foi possível adicionar o serviço ao catálogo.');
-        } finally {
-            setLoading(false);
-        }
+    const handleAddCatalogoSuccess = (novoServico: CatalogoServico) => {
+        setCatalogo(prev => [novoServico, ...prev].sort((a, b) => a.descricao.localeCompare(b.descricao)));
     };
 
     const handleRemoverServicoItem = (itemIndex: number, servicoIndex: number) => {
@@ -639,11 +573,11 @@ export default function NovaOS() {
                                         const cleanText = searchClienteText.trim();
                                         const cleanDigits = cleanText.replace(/\D/g, '');
                                         if (cleanDigits.length >= 8 && /^\d+$/.test(cleanDigits)) {
-                                            setNovoClienteWhatsapp(aplicarMascaraTelefone(cleanDigits));
-                                            setNovoClienteNome('');
+                                            setTempClienteWhatsapp(aplicarMascaraTelefone(cleanDigits));
+                                            setTempClienteNome('');
                                         } else {
-                                            setNovoClienteNome(cleanText);
-                                            setNovoClienteWhatsapp('');
+                                            setTempClienteNome(cleanText);
+                                            setTempClienteWhatsapp('');
                                         }
                                         setShowNovoClienteModal(true);
                                         setShowClienteList(false);
@@ -771,193 +705,26 @@ export default function NovaOS() {
             </ScrollView>
 
             {/* ─── MODAL: NOVO CLIENTE ───────────────────────────────────────── */}
-            <Modal
+            <ModalNovoCliente
                 visible={showNovoClienteModal}
-                animationType="fade"
-                transparent={true}
-                statusBarTranslucent={true}
-                onRequestClose={() => setShowNovoClienteModal(false)}
-            >
-                <KeyboardAvoidingView
-                    behavior="padding"
-                    style={{ flex: 1 }}
-                    keyboardVerticalOffset={0}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalBox}>
-                            <Text style={styles.modalTitle}>Cadastrar Novo Cliente</Text>
-
-                            <Text style={styles.inputLabel}>Nome Completo:</Text>
-                            <TextInput
-                                style={styles.modalInput}
-                                placeholder="Ex: João da Silva"
-                                placeholderTextColor="#9A8E85"
-                                value={novoClienteNome}
-                                onChangeText={setNovoClienteNome}
-                                autoCapitalize="words"
-                                returnKeyType="next"
-                            />
-
-                            <Text style={styles.inputLabel}>WhatsApp/Telefone:</Text>
-                            <TextInput
-                                style={styles.modalInput}
-                                placeholder="Ex: (11) 99999-9999"
-                                placeholderTextColor="#9A8E85"
-                                keyboardType="phone-pad"
-                                value={novoClienteWhatsapp}
-                                onChangeText={(text) => setNovoClienteWhatsapp(aplicarMascaraTelefone(text))}
-                                returnKeyType="done"
-                            />
-
-                            <View style={styles.modalActions}>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
-                                    onPress={() => setShowNovoClienteModal(false)}
-                                >
-                                    <Text style={[styles.modalBtnText, { color: '#7A7067' }]}>Cancelar</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, { backgroundColor: '#8C6239' }]}
-                                    onPress={handleCriarCliente}
-                                >
-                                    <Text style={[styles.modalBtnText, { color: '#FAF9F6' }]}>Salvar</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
+                onClose={() => setShowNovoClienteModal(false)}
+                onSaveSuccess={(novoCliente) => {
+                    setClientes(prev => [novoCliente, ...prev].sort((a, b) => a.nome.localeCompare(b.nome)));
+                    setSelectedCliente(novoCliente);
+                }}
+                initialNome={tempClienteNome}
+                initialWhatsapp={tempClienteWhatsapp}
+            />
 
             {/* ─── MODAL: SELECIONAR / GERENCIAR SERVIÇOS ─────────────────────── */}
-            <Modal
+            <ModalSelecionarServico
                 visible={showServicoModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => {
-                    setShowServicoModal(false);
-                    setShowNovoServicoForm(false);
-                }}
-            >
-                <KeyboardAvoidingView
-                    behavior="padding"
-                    style={{ flex: 1 }}
-                    keyboardVerticalOffset={0}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={[styles.modalBox, { height: 550, maxHeight: '85%', width: '90%' }]}>
-                            <View style={styles.modalBoxHeader}>
-                                <Text style={styles.modalTitle}>Selecionar Serviço</Text>
-                                <TouchableOpacity onPress={() => {
-                                    setShowServicoModal(false);
-                                    setShowNovoServicoForm(false);
-                                }}>
-                                    <Ionicons name="close-outline" size={26} color="#2C2520" />
-                                </TouchableOpacity>
-                            </View>
-
-                            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-                                
-                                {/* FORM DE CRIAR SERVIÇO NO CATÁLOGO */}
-                                {!showNovoServicoForm ? (
-                                    <TouchableOpacity 
-                                        style={styles.btnToggleNewService}
-                                        onPress={() => setShowNovoServicoForm(true)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Ionicons name="add" size={18} color="#8C6239" />
-                                        <Text style={styles.btnToggleNewServiceText}>Novo Serviço</Text>
-                                    </TouchableOpacity>
-                                ) : (
-                                    <View style={styles.newServiceForm}>
-                                        <Text style={styles.newServiceFormTitle}>Adicionar ao Catálogo Geral</Text>
-                                        
-                                        <TextInput
-                                            style={styles.modalInput}
-                                            placeholder="Nome do conserto (ex: Meia Sola Borracha)"
-                                            placeholderTextColor="#9A8E85"
-                                            value={novoServicoDescricao}
-                                            onChangeText={setNovoServicoDescricao}
-                                        />
-                                        <TextInput
-                                            style={styles.modalInput}
-                                            placeholder="Valor padrão (ex: 45.00)"
-                                            placeholderTextColor="#9A8E85"
-                                            keyboardType="numeric"
-                                            value={novoServicoValor}
-                                            onChangeText={setNovoServicoValor}
-                                        />
-
-                                        <View style={styles.rowBetween}>
-                                            <TouchableOpacity 
-                                                style={[styles.smallBtn, { backgroundColor: '#FAF9F6', borderWidth: 1, borderColor: '#E2DCD5' }]}
-                                                onPress={() => setShowNovoServicoForm(false)}
-                                            >
-                                                <Text style={[styles.smallBtnText, { color: '#7A7067' }]}>Voltar</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity 
-                                                style={[styles.smallBtn, { backgroundColor: '#8C6239' }]}
-                                                onPress={handleCriarServicoCatalogo}
-                                            >
-                                                <Text style={[styles.smallBtnText, { color: '#FAF9F6' }]}>Salvar Catálogo</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                )}
-
-                                {/* LISTA DO CATÁLOGO EXISTENTE */}
-                                <Text style={styles.modalSubLabel}>Catálogo de Serviços Disponíveis</Text>
-                                {catalogo.length > 0 ? (
-                                    catalogo.filter(c => c.ativo).map((c) => (
-                                        <TouchableOpacity 
-                                            key={c.id} 
-                                            style={styles.catalogoItemRow}
-                                            onPress={() => handleAdicionarServicoItem(c)}
-                                        >
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.catalogoItemDesc}>{c.descricao}</Text>
-                                                <Text style={styles.catalogoItemPrice}>{formatarReal(c.valorPadrao)}</Text>
-                                            </View>
-                                            <Ionicons name="chevron-forward-outline" size={16} color="#9A8E85" />
-                                        </TouchableOpacity>
-                                    ))
-                                ) : (
-                                    <Text style={styles.noDataText}>O catálogo de serviços está vazio.</Text>
-                                )}
-
-                                <View style={styles.modalDivider} />
-
-                                {/* SERVIÇO MANUAL (NÃO VAI PRO CATÁLOGO) */}
-                                <Text style={styles.modalSubLabel}>Serviço Sob Medida (Avulso para esta OS)</Text>
-                                <View style={styles.newServiceForm}>
-                                    <TextInput
-                                        style={styles.modalInput}
-                                        placeholder="Descrição (ex: Ajuste especial na fivela)"
-                                        placeholderTextColor="#9A8E85"
-                                        value={servicoManualDescricao}
-                                        onChangeText={setServicoManualDescricao}
-                                    />
-                                    <TextInput
-                                        style={styles.modalInput}
-                                        placeholder="Preço R$ (ex: 20.00)"
-                                        placeholderTextColor="#9A8E85"
-                                        keyboardType="numeric"
-                                        value={servicoManualValor}
-                                        onChangeText={setServicoManualValor}
-                                    />
-                                    <TouchableOpacity 
-                                        style={styles.btnAdicionarManual}
-                                        onPress={handleAdicionarServicoManual}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Text style={styles.btnAdicionarManualText}>Adicionar Serviço Sob Medida</Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                            </ScrollView>
-                        </View>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
+                onClose={() => setShowServicoModal(false)}
+                catalogo={catalogo}
+                onSelectServicoItem={handleAdicionarServicoItem}
+                onSelectServicoManual={handleSelectServicoManual}
+                onAddCatalogoSuccess={handleAddCatalogoSuccess}
+            />
 
             {/* ─── MODAL: CÂMERA EM TELA CHEIA (SEM COMPONENTES FILHOS) ────────── */}
             <Modal

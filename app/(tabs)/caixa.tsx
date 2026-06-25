@@ -15,7 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { getDadosCaixaDoDia, fecharCaixa, getHistoricoFechamentos } from '../../src/services/caixaService';
 import { DadosCaixaDoDia } from '../../src/types';
 import { FechamentoCaixa } from '../../src/types';
+import { reloadSignal } from '../../src/utils/reloadSignal';
 import ModalImpressora from '../../src/components/ModalImpressora';
+import MetodoPagCard from '../../src/components/MetodoPagCard';
+import FechamentoCard from '../../src/components/FechamentoCard';
 import ModalComprovante from '../../src/components/ModalComprovante';
 import {
     getMacImpressora,
@@ -56,95 +59,6 @@ function getDataHojeFormatada(): string {
     return `${diasSemana[hoje.getDay()]}, ${hoje.getDate()} de ${meses[hoje.getMonth()]}`;
 }
 
-// ─── Componente de Card de Forma de Pagamento ─────────────────────────────────
-interface MetodoPagCardProps {
-    icone: string;
-    label: string;
-    valor: number;
-    corFundo: string;
-    corIcone: string;
-    corTexto: string;
-}
-
-function MetodoPagCard({ icone, label, valor, corFundo, corIcone, corTexto }: MetodoPagCardProps) {
-    return (
-        <View style={[styles.metodoPagCard, { backgroundColor: corFundo }]}>
-            <View style={[styles.metodoPagIconWrapper, { backgroundColor: corIcone + '22' }]}>
-                <Ionicons name={icone as any} size={18} color={corIcone} />
-            </View>
-            <Text style={[styles.metodoPagLabel, { color: corTexto }]}>{label}</Text>
-            <Text style={[styles.metodoPagValor, { color: '#8C6239' }]}>
-                {formatarReal(valor)}
-            </Text>
-        </View>
-    );
-}
-
-// ─── Componente de Card de Fechamento Histórico ───────────────────────────────
-interface FechamentoCardProps {
-    fechamento: FechamentoCaixa;
-}
-
-function FechamentoCard({ fechamento }: FechamentoCardProps) {
-    const dataFormatada = formatarDataCompleta(fechamento.data);
-    const hora = formatarHoraFechamento(fechamento.data);
-
-    return (
-        <View style={styles.fechamentoCard}>
-            {/* Cabeçalho do card */}
-            <View style={styles.fechamentoCardHeader}>
-                <View style={styles.fechamentoDataWrapper}>
-                    <Ionicons name="calendar-outline" size={14} color="#8C6239" />
-                    <Text style={styles.fechamentoData}>{dataFormatada}</Text>
-                </View>
-                <Text style={styles.fechamentoHora}>{hora}</Text>
-            </View>
-
-            {/* Total em destaque */}
-            <Text style={styles.fechamentoTotal}>{formatarReal(fechamento.totalGeral)}</Text>
-
-            {/* Breakdown por forma de pagamento */}
-            <View style={styles.fechamentoBreakdown}>
-                {fechamento.totalDinheiro > 0 && (
-                    <View style={styles.fechamentoBreakdownItem}>
-                        <View style={[styles.fechamentoBreakdownDot, { backgroundColor: '#2E7D32' }]} />
-                        <Text style={styles.fechamentoBreakdownText}>
-                            Dinheiro: <Text style={styles.fechamentoBreakdownValor}>{formatarReal(fechamento.totalDinheiro)}</Text>
-                        </Text>
-                    </View>
-                )}
-                {fechamento.totalPix > 0 && (
-                    <View style={styles.fechamentoBreakdownItem}>
-                        <View style={[styles.fechamentoBreakdownDot, { backgroundColor: '#1565C0' }]} />
-                        <Text style={styles.fechamentoBreakdownText}>
-                            PIX: <Text style={styles.fechamentoBreakdownValor}>{formatarReal(fechamento.totalPix)}</Text>
-                        </Text>
-                    </View>
-                )}
-                {fechamento.totalCartao > 0 && (
-                    <View style={styles.fechamentoBreakdownItem}>
-                        <View style={[styles.fechamentoBreakdownDot, { backgroundColor: '#8D6E1A' }]} />
-                        <Text style={styles.fechamentoBreakdownText}>
-                            Cartão: <Text style={styles.fechamentoBreakdownValor}>{formatarReal(fechamento.totalCartao)}</Text>
-                        </Text>
-                    </View>
-                )}
-            </View>
-
-            {/* Rodapé com contadores */}
-            <View style={styles.fechamentoFooter}>
-                <View style={styles.fechamentoChip}>
-                    <Ionicons name="document-text-outline" size={11} color="#7A7067" />
-                    <Text style={styles.fechamentoChipText}>{fechamento.quantidadeOS} OS</Text>
-                </View>
-                <View style={styles.fechamentoChip}>
-                    <Ionicons name="cart-outline" size={11} color="#7A7067" />
-                    <Text style={styles.fechamentoChipText}>{fechamento.quantidadeVendas} vendas</Text>
-                </View>
-            </View>
-        </View>
-    );
-}
 
 // ─── Tela Principal ───────────────────────────────────────────────────────────
 export default function Caixa() {
@@ -190,8 +104,11 @@ export default function Caixa() {
 
     useFocusEffect(
         useCallback(() => {
-            setLoading(true);
-            carregarDados();
+            if (reloadSignal.caixa) {
+                setLoading(true);
+                carregarDados();
+                reloadSignal.caixa = false;
+            }
         }, [])
     );
 

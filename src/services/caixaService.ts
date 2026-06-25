@@ -1,6 +1,7 @@
 import { collection, addDoc, getDocs, query, orderBy, Timestamp, limit, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { FechamentoCaixa, DadosCaixaDoDia } from '../types';
+import { reloadSignal } from '../utils/reloadSignal';
 
 
 const FECHAMENTOS_COL = 'fechamentos_caixa';
@@ -12,6 +13,7 @@ export async function fecharCaixa(dados: Omit<FechamentoCaixa, 'id' | 'data'>): 
         ...dados,
         data: Timestamp.now(),
     });
+    reloadSignal.markAllDirty();
     return docRef.id;
 }
 

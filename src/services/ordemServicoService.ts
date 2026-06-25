@@ -1,6 +1,7 @@
 import { collection, addDoc, getDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp, limit, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { OrdemServico, FormaPagamento, StatusOS } from '../types';
+import { reloadSignal } from '../utils/reloadSignal';
 
 const ORDENS_COL = 'ordens_servico';
 
@@ -11,6 +12,7 @@ export async function salvarOS(os: Omit<OrdemServico, 'id' | 'createdAt' | 'upda
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
     });
+    reloadSignal.markAllDirty();
     return docRef.id;
 }
 
@@ -43,6 +45,7 @@ export async function atualizarStatusOS(osId: string, novoStatus: StatusOS, form
     };
     if (formaPagamentoSaldo) updates.formaPagamentoSaldo = formaPagamentoSaldo;
     await updateDoc(osRef, updates);
+    reloadSignal.markAllDirty();
 }
 
 // atualizar dados gerais da OS
@@ -52,12 +55,14 @@ export async function atualizarOS(osId: string, dadosAtualizados: Partial<Omit<O
         ...dadosAtualizados,
         updatedAt: Timestamp.now(),
     });
+    reloadSignal.markAllDirty();
 }
 
 // deletar OS
 export async function deletarOS(osId: string): Promise<void> {
     const osRef = doc(db, ORDENS_COL, osId);
     await deleteDoc(osRef);
+    reloadSignal.markAllDirty();
 }
 
 // buscar OS por clienteId
@@ -69,4 +74,4 @@ export async function getOrdensByClienteId(clienteId: string): Promise<OrdemServ
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrdemServico));
-}
+}

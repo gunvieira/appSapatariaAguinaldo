@@ -1,6 +1,7 @@
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Cliente } from '../types';
+import { reloadSignal } from '../utils/reloadSignal';
 
 const CLIENTES_COL = 'clientes';
 
@@ -32,6 +33,7 @@ export async function addCliente(nome: string, whatsapp: string): Promise<Client
             whatsapp,
             createdAt: Timestamp.now(),
         });
+        reloadSignal.markAllDirty();
         return {
             id: docRef.id,
             nome,
@@ -51,6 +53,7 @@ export async function updateCliente(id: string, dadosAtualizados: Partial<Omit<C
             ...dadosAtualizados,
             updatedAt: Timestamp.now()
         });
+        reloadSignal.markAllDirty();
         console.log('Cliente atualizado com sucesso');
     } catch (error) {
         console.error('Erro ao atualizar cliente:', error);
@@ -63,6 +66,7 @@ export async function deleteCliente(id: string): Promise<void> {
     try {
         const clienteRef = doc(db, CLIENTES_COL, id);
         await deleteDoc(clienteRef);
+        reloadSignal.markAllDirty();
         console.log('Cliente removido com sucesso');
     } catch (error) {
         console.error('Erro ao deletar cliente:', error);

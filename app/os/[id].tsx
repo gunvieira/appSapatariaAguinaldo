@@ -21,6 +21,7 @@ import { OrdemServico, StatusOS, FormaPagamento } from '../../src/types';
 import StatusBadge from '../../src/components/StatusBadge';
 import ModalImpressora from '../../src/components/ModalImpressora';
 import ModalComprovante from '../../src/components/ModalComprovante';
+import ModalReceberSaldo from '../../src/components/ModalReceberSaldo';
 import {
     getMacImpressora,
     salvarMacImpressora,
@@ -55,6 +56,7 @@ export default function DetalhesOS() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [os, setOs] = useState<OrdemServico | null>(null);
+    const [fotoZoom, setFotoZoom] = useState<string | null>(null);
 
     // Printer states
     const [showModalImpressora, setShowModalImpressora] = useState(false);
@@ -151,13 +153,13 @@ export default function DetalhesOS() {
         }
     };
 
-    const confirmarEntregaComSaldo = async () => {
+    const confirmarEntregaComSaldo = async (forma: FormaPagamento) => {
         if (!os) return;
         try {
             setProcessandoEntrega(true);
-            await atualizarStatusOS(os.id, 'entregue', formaPagamentoSaldoSel);
+            await atualizarStatusOS(os.id, 'entregue', forma);
             setShowPagamentoModal(false);
-            await registrarSucessoEntrega(formaPagamentoSaldoSel);
+            await registrarSucessoEntrega(forma);
         } catch (error) {
             Alert.alert('Erro', 'Não foi possível registrar o pagamento e entrega.');
         } finally {
@@ -385,11 +387,16 @@ export default function DetalhesOS() {
                                     <Text style={styles.photoTitle}>Fotos de Entrada (Estado Inicial):</Text>
                                     <View style={styles.photosGrid}>
                                         {item.fotosEntrada.map((uri, idx) => (
-                                            <Image
+                                            <TouchableOpacity
                                                 key={idx}
-                                                source={{ uri }}
-                                                style={styles.photoThumb}
-                                            />
+                                                onPress={() => setFotoZoom(uri)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Image
+                                                    source={{ uri }}
+                                                    style={styles.photoThumb}
+                                                />
+                                            </TouchableOpacity>
                                         ))}
                                     </View>
                                 </View>
@@ -504,118 +511,15 @@ export default function DetalhesOS() {
 
             </ScrollView>
 
-            {/* ─── MODAL SELEÇÃO DE PAGAMENTO SALDO ───────────────────────────── */}
-            <Modal
+            {/* ─── MODAL RECEBER SALDO ──────────────────────────────────── */}
+            <ModalReceberSaldo
                 visible={showPagamentoModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowPagamentoModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalSheet}>
-                        <View style={styles.modalHandle} />
-                        <Text style={styles.modalTitle}>Recebimento de Saldo</Text>
-                        <Text style={styles.modalSubtitle}>
-                            Para entregar o calçado, registre o recebimento do saldo de:
-                        </Text>
-                        <Text style={styles.modalValorDestaque}>{formatarReal(os.saldo)}</Text>
-
-                        <Text style={styles.labelForma}>Forma de Pagamento:</Text>
-                        <View style={styles.formaRow}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.formaChip,
-                                    formaPagamentoSaldoSel === 'dinheiro' && styles.formaChipActive
-                                ]}
-                                onPress={() => setFormaPagamentoSaldoSel('dinheiro')}
-                            >
-                                <Ionicons
-                                    name="cash-outline"
-                                    size={16}
-                                    color={formaPagamentoSaldoSel === 'dinheiro' ? '#FAF9F6' : '#7A7067'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.formaText,
-                                        formaPagamentoSaldoSel === 'dinheiro' && styles.formaTextActive
-                                    ]}
-                                >
-                                    Dinheiro
-                                </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.formaChip,
-                                    formaPagamentoSaldoSel === 'pix' && styles.formaChipActive
-                                ]}
-                                onPress={() => setFormaPagamentoSaldoSel('pix')}
-                            >
-                                <Ionicons
-                                    name="qr-code-outline"
-                                    size={16}
-                                    color={formaPagamentoSaldoSel === 'pix' ? '#FAF9F6' : '#7A7067'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.formaText,
-                                        formaPagamentoSaldoSel === 'pix' && styles.formaTextActive
-                                    ]}
-                                >
-                                    PIX
-                                </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.formaChip,
-                                    formaPagamentoSaldoSel === 'cartão' && styles.formaChipActive
-                                ]}
-                                onPress={() => setFormaPagamentoSaldoSel('cartão')}
-                            >
-                                <Ionicons
-                                    name="card-outline"
-                                    size={16}
-                                    color={formaPagamentoSaldoSel === 'cartão' ? '#FAF9F6' : '#7A7067'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.formaText,
-                                        formaPagamentoSaldoSel === 'cartão' && styles.formaTextActive
-                                    ]}
-                                >
-                                    Cartão
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity
-                                style={styles.btnModalCancel}
-                                onPress={() => setShowPagamentoModal(false)}
-                                disabled={processandoEntrega}
-                            >
-                                <Text style={styles.btnModalCancelText}>Cancelar</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.btnModalConfirm}
-                                onPress={confirmarEntregaComSaldo}
-                                disabled={processandoEntrega}
-                            >
-                                {processandoEntrega ? (
-                                    <ActivityIndicator size="small" color="#FAF9F6" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="checkmark" size={18} color="#FAF9F6" />
-                                        <Text style={styles.btnModalConfirmText}>Confirmar Recebimento</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+                saldo={os?.saldo ?? 0}
+                onClose={() => setShowPagamentoModal(false)}
+                onConfirm={async (forma) => {
+                    await confirmarEntregaComSaldo(forma);
+                }}
+            />
 
             {/* ─── MODAL SELEÇÃO DE IMPRESSORA ────────────────────────────── */}
             <ModalImpressora
@@ -660,6 +564,26 @@ export default function DetalhesOS() {
                     </View>
                 </View>
             )}
+
+            {/* Modal de Zoom da Foto */}
+            <Modal
+                visible={!!fotoZoom}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setFotoZoom(null)}
+            >
+                <View style={styles.zoomOverlay}>
+                    <TouchableOpacity 
+                        style={styles.zoomCloseBtn}
+                        onPress={() => setFotoZoom(null)}
+                    >
+                        <Ionicons name="close" size={30} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    {fotoZoom && (
+                        <Image source={{ uri: fotoZoom }} style={styles.zoomImage} />
+                    )}
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -1165,5 +1089,26 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#7A7067',
         fontWeight: '600',
+    },
+    // Zoom Modal
+    zoomOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    zoomCloseBtn: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 50 : 30,
+        right: 20,
+        zIndex: 10,
+        padding: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 25,
+    },
+    zoomImage: {
+        width: '95%',
+        height: '80%',
+        resizeMode: 'contain',
     },
 });

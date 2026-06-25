@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "appSapatariaAguinaldo",
+    "name": "Sapataria Aguinaldo",
     "slug": "appSapatariaAguinaldo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -32,7 +32,17 @@
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -47,6 +57,18 @@
         }
       ],
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "50dee0f8-66a9-4f8e-a9fe-a98efdd145a9"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/50dee0f8-66a9-4f8e-a9fe-a98efdd145a9"
+    }
   }
 }

@@ -11,13 +11,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {getDashboardMetrics } from'../../src/services/dashboardService';
-import {getRecentOS} from '../../src/services/ordemServicoService';
+import { getDashboardMetrics } from '../../src/services/dashboardService';
+import { getRecentOS } from '../../src/services/ordemServicoService';
 import { DashboardMetrics } from '../../src/types';
 import { OrdemServico } from '../../src/types';
 import MetricCard from '../../src/components/MetricCard';
 import OSItemCard from '../../src/components/OSItemCard';
 import { formatarReal } from '../../src/utils/format';
+import { reloadSignal } from '../../src/utils/reloadSignal';
 
 export default function Dashboard() {
     const router = useRouter();
@@ -52,7 +53,10 @@ export default function Dashboard() {
 
     useFocusEffect(
         useCallback(() => {
-            carregarDados();
+            if (reloadSignal.dashboard) {
+                carregarDados();
+                reloadSignal.dashboard = false;
+            }
         }, [])
     );
 

@@ -1,6 +1,7 @@
 import { collection, addDoc, getDocs, doc, deleteDoc, query, orderBy, Timestamp, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ItemVenda, VendaDiretaDoc, FormaPagamento } from '../types';
+import { reloadSignal } from '../utils/reloadSignal';
 
 const VENDAS_COL = 'vendas_diretas';
 
@@ -13,6 +14,7 @@ export async function salvarVendaDireta(itens: ItemVenda[], formaPagamento: Form
         formaPagamento,
         createdAt: Timestamp.now(),
     });
+    reloadSignal.markAllDirty();
     return docRef.id;
 }
 
@@ -44,4 +46,5 @@ export async function getVendasDoDia(): Promise<VendaDiretaDoc[]> {
 export async function deletarVendaDireta(id: string): Promise<void> {
     const docRef = doc(db, VENDAS_COL, id);
     await deleteDoc(docRef);
+    reloadSignal.markAllDirty();
 }
